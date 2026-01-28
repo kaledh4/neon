@@ -81,6 +81,69 @@ namespace NeonSplash
             return mat;
         }
 
+        public static void ApplyMicroVariation(Transform t, Renderer r, int seed)
+        {
+            var rng = new System.Random(seed);
+            t.Rotate(0f, (float)(rng.NextDouble() * 12f - 6f), 0f);
+            float scale = 0.9f + (float)rng.NextDouble() * 0.2f;
+            t.localScale *= scale;
+            t.position += Vector3.up * (float)(rng.NextDouble() * 0.1f - 0.05f);
+
+            if (r != null && r.material.HasProperty("_Color"))
+            {
+                float tint = 0.95f + (float)rng.NextDouble() * 0.1f;
+                r.material.color *= tint;
+            }
+        }
+
+        public static void ApplyRoleColor(Renderer r, float saturationMultiplier)
+        {
+            if (r == null) return;
+            Color c = r.material.color;
+            Color.RGBToHSV(c, out float h, out float s, out float v);
+            s *= saturationMultiplier;
+            r.material.color = Color.HSVToRGB(h, s, v);
+            if (r.material.IsKeywordEnabled("_EMISSION"))
+            {
+                r.material.SetColor("_EmissionColor", r.material.GetColor("_EmissionColor") * saturationMultiplier);
+            }
+        }
+
+        public static Light SpawnAccentLight(Transform parent, Vector3 localPos, Color color)
+        {
+            var go = new GameObject("AccentLight");
+            go.transform.SetParent(parent);
+            go.transform.localPosition = localPos + Vector3.up * 2.5f;
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.range = 10f;
+            light.intensity = 1.0f;
+            light.color = color;
+            go.AddComponent<NeonSplash.V0_1.NeonPulse>().baseIntensity = 1.0f;
+            return light;
+        }
+
+        public static void CreateFakeReflection(GameObject source, Transform parent)
+        {
+            GameObject refl = GameObject.Instantiate(source, parent);
+            refl.name = source.name + "_Reflection";
+            refl.transform.localScale = new Vector3(source.transform.localScale.x, -source.transform.localScale.y * 0.5f, source.transform.localScale.z);
+            refl.transform.localPosition = new Vector3(source.transform.localPosition.x, -0.5f, source.transform.localPosition.z);
+            
+            Renderer r = refl.GetComponent<Renderer>();
+            if (r != null)
+            {
+                Material m = new Material(r.material);
+                Color c = m.color;
+                c.a = 0.2f;
+                m.color = c;
+                m.SetFloat("_Smoothness", 0f);
+                r.material = m;
+            }
+            // Remove colliders from reflections
+            foreach (var col in refl.GetComponentsInChildren<Collider>()) Object.Destroy(col);
+        }
+
         public static GameObject CreateBase(Vector3 position, ColorPalette palette, bool isBlue, float size = 100f)
         {
             GameObject group = new GameObject(isBlue ? "BaseBlue" : "BaseRed");
@@ -97,6 +160,10 @@ namespace NeonSplash
             Renderer r = floor.GetComponent<Renderer>();
             r.material = GetTileMaterial(teamColor);
             r.material.mainTextureScale = new Vector2(size / 5f, size / 5f);
+            ApplyRoleColor(r, 0.6f); // Lower saturation for floors
+
+            // Accent light for team identity
+            SpawnAccentLight(group.transform, Vector3.zero, teamColor);
 
             // Team Pedestal
             GameObject pedestal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -141,35 +208,50 @@ namespace NeonSplash
             floor.transform.SetParent(group.transform);
             floor.transform.localPosition = new Vector3(0, -0.25f, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
-            floor.GetComponent<Renderer>().material = GetNeonMaterial(new Color(0, 0.5f, 0.1f), 0.3f);
+            Renderer rFloor = floor.GetComponent<Renderer>();
+            rFloor.material = GetNeonMaterial(new Color(0, 0.5f, 0.1f), 0.3f);
+            ApplyRoleColor(rFloor, 0.5f);
 
             // 25 Decoration Items
             for (int i = 0; i < 25; i++)
             {
                 Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
+                GameObject item;
                 if (i < 15) // 15 Trees
                 {
+                    item = new GameObject("NeonTree");
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos;
+
                     GameObject trunk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    trunk.transform.SetParent(group.transform);
-                    trunk.transform.localPosition = randomPos + Vector3.up * 4;
+                    trunk.transform.SetParent(item.transform);
+                    trunk.transform.localPosition = Vector3.up * 4;
                     trunk.transform.localScale = new Vector3(1, 4, 1);
                     trunk.GetComponent<Renderer>().material = GetMat(new Color(0.1f, 0.1f, 0.1f));
 
                     GameObject leaves = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    leaves.transform.SetParent(group.transform);
-                    leaves.transform.localPosition = randomPos + Vector3.up * 9;
+                    leaves.transform.SetParent(item.transform);
+                    leaves.transform.localPosition = Vector3.up * 9;
                     leaves.transform.localScale = new Vector3(6, 6, 6);
-                    leaves.GetComponent<Renderer>().material = GetNeonMaterial(new Color(0, 1, 0.2f), 0.8f);
+                    var rendL = leaves.GetComponent<Renderer>();
+                    rendL.material = GetNeonMaterial(new Color(0, 1, 0.2f), 0.8f);
+                    ApplyRoleColor(rendL, 0.9f);
                 }
                 else // 10 Neon Flowers/Lights
                 {
-                    GameObject flower = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    flower.transform.SetParent(group.transform);
-                    flower.transform.localPosition = randomPos + Vector3.up * 0.5f;
-                    flower.transform.localScale = Vector3.one * 1.5f;
-                    flower.GetComponent<Renderer>().material = GetNeonMaterial(palette.Secondary, 2.0f);
+                    item = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos + Vector3.up * 0.5f;
+                    item.transform.localScale = Vector3.one * 1.5f;
+                    var rendF = item.GetComponent<Renderer>();
+                    rendF.material = GetNeonMaterial(palette.Secondary, 2.0f);
+                    ApplyRoleColor(rendF, 1.0f);
+                    item.AddComponent<NeonSplash.V0_1.NeonPulse>().amplitude = 0.3f;
                 }
+                ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.x + i));
             }
+
+            SpawnAccentLight(group.transform, Vector3.zero, new Color(0, 1, 0.2f));
 
             if (mirror) group.transform.localScale = new Vector3(-1, 1, 1);
             return group;
@@ -188,41 +270,57 @@ namespace NeonSplash
             Renderer rendG = floor.GetComponent<Renderer>();
             rendG.material = GetWoodMaterial();
             rendG.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
+            ApplyRoleColor(rendG, 0.6f);
 
             // 25 Items (Chairs, Umbrellas, Lights)
             for (int i = 0; i < 25; i++)
             {
                 Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
+                GameObject item;
                 if (i < 10) // 10 Lounge Chairs
                 {
-                    GameObject chair = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    chair.transform.SetParent(group.transform);
-                    chair.transform.localPosition = randomPos + Vector3.up * 0.5f;
-                    chair.transform.localScale = new Vector3(4, 0.5f, 2);
-                    chair.GetComponent<Renderer>().material = GetNeonMaterial(palette.Primary, 0.5f);
+                    item = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos + Vector3.up * 0.5f;
+                    item.transform.localScale = new Vector3(4, 0.5f, 2);
+                    var rC = item.GetComponent<Renderer>();
+                    rC.material = GetNeonMaterial(palette.Primary, 0.5f);
+                    ApplyRoleColor(rC, 0.8f);
                 }
                 else if (i < 15) // 5 Umbrellas
                 {
+                    item = new GameObject("Umbrella");
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos;
+
                     GameObject pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    pole.transform.SetParent(group.transform);
-                    pole.transform.localPosition = randomPos + Vector3.up * 3;
+                    pole.transform.SetParent(item.transform);
+                    pole.transform.localPosition = Vector3.up * 3;
                     pole.transform.localScale = new Vector3(0.2f, 3, 0.2f);
                     
                     GameObject top = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    top.transform.SetParent(group.transform);
-                    top.transform.localPosition = randomPos + Vector3.up * 6;
+                    top.transform.SetParent(item.transform);
+                    top.transform.localPosition = Vector3.up * 6;
                     top.transform.localScale = new Vector3(6, 0.1f, 6);
-                    top.GetComponent<Renderer>().material = GetNeonMaterial(palette.Secondary, 0.8f);
+                    var rU = top.GetComponent<Renderer>();
+                    rU.material = GetNeonMaterial(palette.Secondary, 0.8f);
+                    ApplyRoleColor(rU, 1.0f);
                 }
                 else // 10 Floating Neon Orbs
                 {
-                    GameObject orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    orb.transform.SetParent(group.transform);
-                    orb.transform.localPosition = randomPos + Vector3.up * 2;
-                    orb.transform.localScale = Vector3.one * 1.2f;
-                    orb.GetComponent<Renderer>().material = GetNeonMaterial(palette.Shooting, 1.5f);
+                    item = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos + Vector3.up * 2.5f;
+                    item.transform.localScale = Vector3.one * 1.2f;
+                    var rO = item.GetComponent<Renderer>();
+                    rO.material = GetNeonMaterial(palette.Shooting, 1.5f);
+                    ApplyRoleColor(rO, 1.2f);
+                    item.AddComponent<NeonSplash.V0_1.NeonPulse>();
                 }
+                ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.z + i));
             }
+
+            SpawnAccentLight(group.transform, Vector3.zero, palette.Primary);
 
             return group;
         }
@@ -287,28 +385,38 @@ namespace NeonSplash
             Renderer rendTub = floor.GetComponent<Renderer>();
             rendTub.material = GetWoodMaterial();
             rendTub.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
+            ApplyRoleColor(rendTub, 0.6f);
 
             // 25 Items (Tubs, candles, towels, orbs)
             for (int i = 0; i < 25; i++)
             {
                 Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
+                GameObject item;
                 if (i < 5) // 5 Tubs
                 {
-                    GameObject tub = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    tub.transform.SetParent(group.transform);
-                    tub.transform.localPosition = randomPos + Vector3.up * 0.5f;
-                    tub.transform.localScale = new Vector3(8, 0.5f, 8);
-                    tub.GetComponent<Renderer>().material = GetNeonMaterial(palette.Secondary, 1.5f);
+                    item = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos + Vector3.up * 0.5f;
+                    item.transform.localScale = new Vector3(8, 0.5f, 8);
+                    var rT = item.GetComponent<Renderer>();
+                    rT.material = GetNeonMaterial(palette.Secondary, 1.5f);
+                    ApplyRoleColor(rT, 1.0f);
+                    item.AddComponent<NeonSplash.V0_1.NeonPulse>().amplitude = 0.1f;
                 }
                 else // 20 Candles/Orbs
                 {
-                    GameObject orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    orb.transform.SetParent(group.transform);
-                    orb.transform.localPosition = randomPos + Vector3.up * 1f;
-                    orb.transform.localScale = Vector3.one * 0.8f;
-                    orb.GetComponent<Renderer>().material = GetNeonMaterial(palette.Primary, 5f);
+                    item = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos + Vector3.up * 1f;
+                    item.transform.localScale = Vector3.one * 0.8f;
+                    var rO = item.GetComponent<Renderer>();
+                    rO.material = GetNeonMaterial(palette.Primary, 5f);
+                    ApplyRoleColor(rO, 1.4f); // Objectives/small lights high contrast
                 }
+                ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.x * position.z + i));
             }
+
+            SpawnAccentLight(group.transform, Vector3.zero, palette.Secondary);
 
             return group;
         }
@@ -326,13 +434,27 @@ namespace NeonSplash
             Renderer rendD = deck.GetComponent<Renderer>();
             rendD.material = GetTileMaterial(new Color(0, 0.3f, 0.6f));
             rendD.material.mainTextureScale = new Vector2(size/4f, size/4f);
+            ApplyRoleColor(rendD, 0.6f);
 
             // Glowing Water
             GameObject water = GameObject.CreatePrimitive(PrimitiveType.Cube);
             water.transform.SetParent(group.transform);
             water.transform.localPosition = new Vector3(0, 0.2f, 0);
             water.transform.localScale = new Vector3(size * 0.9f, 0.1f, size * 0.9f);
-            water.GetComponent<Renderer>().material = GetNeonMaterial(palette.Primary, 1.2f);
+            var rendW = water.GetComponent<Renderer>();
+            rendW.material = GetNeonMaterial(palette.Primary, 1.5f);
+            ApplyRoleColor(rendW, 0.8f);
+
+            // Fake Reflections (Old School trick)
+            // Spawn a few sample reflected objects
+            for (int i = 0; i < 5; i++)
+            {
+                GameObject dummy = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                dummy.transform.SetParent(group.transform);
+                dummy.transform.localPosition = new Vector3(Random.Range(-size*0.3f, size*0.3f), 2f, Random.Range(-size*0.3f, size*0.3f));
+                dummy.GetComponent<Renderer>().material = GetNeonMaterial(palette.Shooting, 2f);
+                CreateFakeReflection(dummy, group.transform);
+            }
 
             return group;
         }

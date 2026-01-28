@@ -65,7 +65,13 @@ namespace NeonSplash.V0_1
             RenderSettings.fog = true;
             RenderSettings.fogColor = palette.Fog; 
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.005f; // reduced for larger scale
+            RenderSettings.fogDensity = 0.005f;
+
+            // Procedural Mood per Match (Elite Touch)
+            float moodFactor = (seed % 100) / 100f;
+            RenderSettings.ambientLight = Color.Lerp(new Color(0.1f, 0.15f, 0.2f), new Color(0.2f, 0.1f, 0.15f), moodFactor);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+
             if (Camera.main) Camera.main.backgroundColor = palette.Background;
         }
 
@@ -184,8 +190,11 @@ namespace NeonSplash.V0_1
             if (mainCam != null)
             {
                 mainCam.transform.SetParent(player.transform);
-                mainCam.transform.localPosition = new Vector3(0, 2.5f, -6f); 
+                mainCam.transform.localPosition = new Vector3(0, 1.8f, 0.2f); // Better first person feel 
                 mainCam.transform.localRotation = Quaternion.identity;
+                
+                // Attach AAA Camera Systems
+                mainCam.gameObject.AddComponent<CameraPerception>();
             }
         }
     }
