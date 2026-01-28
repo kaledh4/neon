@@ -144,10 +144,21 @@ namespace NeonSplash
             foreach (var col in refl.GetComponentsInChildren<Collider>()) Object.Destroy(col);
         }
 
+        public static bool IsPrimaryPath(Vector3 pos) => Mathf.Abs(pos.z) < 15f; // Center corridor
+
+        public static void AdjustForFlow(GameObject obj, Vector3 pos)
+        {
+            if (IsPrimaryPath(pos))
+                obj.transform.localScale *= 0.7f; // Clear traffic paths
+            else
+                obj.transform.localScale *= 1.3f; // Denser surroundings
+        }
+
         public static GameObject CreateBase(Vector3 position, ColorPalette palette, bool isBlue, float size = 100f)
         {
             GameObject group = new GameObject(isBlue ? "BaseBlue" : "BaseRed");
             group.transform.position = position;
+            var state = group.AddComponent<NeonSplash.V0_1.ChunkStateController>();
 
             Color teamColor = isBlue ? new Color(0, 0.4f, 1f) : new Color(1f, 0.2f, 0f);
             Color accentColor = isBlue ? palette.Primary : palette.Secondary;
@@ -160,10 +171,10 @@ namespace NeonSplash
             Renderer r = floor.GetComponent<Renderer>();
             r.material = GetTileMaterial(teamColor);
             r.material.mainTextureScale = new Vector2(size / 5f, size / 5f);
-            ApplyRoleColor(r, 0.6f); // Lower saturation for floors
+            ApplyRoleColor(r, 0.6f); 
 
-            // Accent light for team identity
-            SpawnAccentLight(group.transform, Vector3.zero, teamColor);
+            // Accent light
+            state.lights.Add(SpawnAccentLight(group.transform, Vector3.zero, teamColor));
 
             // Team Pedestal
             GameObject pedestal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -202,6 +213,7 @@ namespace NeonSplash
         {
             GameObject group = new GameObject("Trees_Neon_Complex");
             group.transform.position = position;
+            var state = group.AddComponent<NeonSplash.V0_1.ChunkStateController>();
 
             // Base Floor (GREEN NEON STYLE)
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -248,10 +260,11 @@ namespace NeonSplash
                     ApplyRoleColor(rendF, 1.0f);
                     item.AddComponent<NeonSplash.V0_1.NeonPulse>().amplitude = 0.3f;
                 }
+                AdjustForFlow(item, randomPos);
                 ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.x + i));
             }
 
-            SpawnAccentLight(group.transform, Vector3.zero, new Color(0, 1, 0.2f));
+            state.lights.Add(SpawnAccentLight(group.transform, Vector3.zero, new Color(0, 1, 0.2f)));
 
             if (mirror) group.transform.localScale = new Vector3(-1, 1, 1);
             return group;
@@ -261,6 +274,7 @@ namespace NeonSplash
         {
             GameObject group = new GameObject("Garden_VIP_Deck");
             group.transform.position = position;
+            var state = group.AddComponent<NeonSplash.V0_1.ChunkStateController>();
 
             // Wood Floor
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -317,11 +331,11 @@ namespace NeonSplash
                     ApplyRoleColor(rO, 1.2f);
                     item.AddComponent<NeonSplash.V0_1.NeonPulse>();
                 }
+                AdjustForFlow(item, randomPos);
                 ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.z + i));
             }
 
-            SpawnAccentLight(group.transform, Vector3.zero, palette.Primary);
-
+            state.lights.Add(SpawnAccentLight(group.transform, Vector3.zero, palette.Primary));
             return group;
         }
 
@@ -329,6 +343,7 @@ namespace NeonSplash
         {
             GameObject group = new GameObject("TikiBar_Neon_Deluxe");
             group.transform.position = position;
+            var state = group.AddComponent<NeonSplash.V0_1.ChunkStateController>();
 
             // Wood Floor
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -338,37 +353,46 @@ namespace NeonSplash
             Renderer rendB = floor.GetComponent<Renderer>();
             rendB.material = GetWoodMaterial();
             rendB.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
+            ApplyRoleColor(rendB, 0.6f);
 
             // 25 Items (Bar stuff, stools, lights)
             for (int i = 0; i < 25; i++)
             {
                 Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
+                GameObject item;
                 if (i == 0) // Main Bar Table
                 {
-                    GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    bar.transform.SetParent(group.transform);
-                    bar.transform.localPosition = new Vector3(0, 1.5f, 0);
-                    bar.transform.localScale = new Vector3(15, 3, 4);
-                    bar.GetComponent<Renderer>().material = GetMat(new Color(0.3f, 0.2f, 0.1f));
+                    item = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = new Vector3(0, 1.5f, 0);
+                    item.transform.localScale = new Vector3(15, 3, 4);
+                    item.GetComponent<Renderer>().material = GetMat(new Color(0.3f, 0.2f, 0.1f));
                 }
                 else if (i < 12) // 11 Stools
                 {
-                    GameObject stool = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    stool.transform.SetParent(group.transform);
-                    stool.transform.localPosition = randomPos + Vector3.up * 1f;
-                    stool.transform.localScale = new Vector3(1.5f, 1f, 1.5f);
-                    stool.GetComponent<Renderer>().material = GetNeonMaterial(palette.Primary, 1.2f);
+                    item = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos + Vector3.up * 1f;
+                    item.transform.localScale = new Vector3(1.5f, 1f, 1.5f);
+                    var rS = item.GetComponent<Renderer>();
+                    rS.material = GetNeonMaterial(palette.Primary, 1.2f);
+                    ApplyRoleColor(rS, 1.0f);
                 }
                 else // 13 Neon Pillars/Lights
                 {
-                    GameObject pillar = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    pillar.transform.SetParent(group.transform);
-                    pillar.transform.localPosition = randomPos + Vector3.up * 4;
-                    pillar.transform.localScale = new Vector3(1, 4, 1);
-                    pillar.GetComponent<Renderer>().material = GetNeonMaterial(palette.Shooting, 3f);
+                    item = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    item.transform.SetParent(group.transform);
+                    item.transform.localPosition = randomPos + Vector3.up * 4;
+                    item.transform.localScale = new Vector3(1, 4, 1);
+                    var rP = item.GetComponent<Renderer>();
+                    rP.material = GetNeonMaterial(palette.Shooting, 3f);
+                    ApplyRoleColor(rP, 1.2f);
                 }
+                AdjustForFlow(item, randomPos);
+                ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.x - position.z + i));
             }
 
+            state.lights.Add(SpawnAccentLight(group.transform, Vector3.zero, palette.Shooting));
             return group;
         }
 
@@ -376,6 +400,7 @@ namespace NeonSplash
         {
             GameObject group = new GameObject("HotTub_Ultra_VIP");
             group.transform.position = position;
+            var state = group.AddComponent<NeonSplash.V0_1.ChunkStateController>();
 
             // Wood Floor
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -411,13 +436,13 @@ namespace NeonSplash
                     item.transform.localScale = Vector3.one * 0.8f;
                     var rO = item.GetComponent<Renderer>();
                     rO.material = GetNeonMaterial(palette.Primary, 5f);
-                    ApplyRoleColor(rO, 1.4f); // Objectives/small lights high contrast
+                    ApplyRoleColor(rO, 1.4f); 
                 }
+                AdjustForFlow(item, randomPos);
                 ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.x * position.z + i));
             }
 
-            SpawnAccentLight(group.transform, Vector3.zero, palette.Secondary);
-
+            state.lights.Add(SpawnAccentLight(group.transform, Vector3.zero, palette.Secondary));
             return group;
         }
 
@@ -425,6 +450,7 @@ namespace NeonSplash
         {
             GameObject group = new GameObject(isLeftHalf ? "PoolLeft" : "PoolRight");
             group.transform.position = position;
+            var state = group.AddComponent<NeonSplash.V0_1.ChunkStateController>();
 
             // Pool Border (BLUISH TILES)
             GameObject deck = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -445,8 +471,7 @@ namespace NeonSplash
             rendW.material = GetNeonMaterial(palette.Primary, 1.5f);
             ApplyRoleColor(rendW, 0.8f);
 
-            // Fake Reflections (Old School trick)
-            // Spawn a few sample reflected objects
+            // Fake Reflections
             for (int i = 0; i < 5; i++)
             {
                 GameObject dummy = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -456,6 +481,7 @@ namespace NeonSplash
                 CreateFakeReflection(dummy, group.transform);
             }
 
+            state.lights.Add(SpawnAccentLight(group.transform, Vector3.forward * 20f, palette.Primary));
             return group;
         }
 

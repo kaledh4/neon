@@ -67,12 +67,27 @@ namespace NeonSplash.V0_1
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogDensity = 0.005f;
 
-            // Procedural Mood per Match (Elite Touch)
-            float moodFactor = (seed % 100) / 100f;
-            RenderSettings.ambientLight = Color.Lerp(new Color(0.1f, 0.15f, 0.2f), new Color(0.2f, 0.1f, 0.15f), moodFactor);
+            // Match Progress Ambient Shift (Temporal Variation)
+            float matchProgress = 0f;
+            if (GameManager.Instance != null)
+                matchProgress = 1f - (GameManager.Instance.currentMatchTime / GameManager.Instance.matchDuration);
+
+            Color ambientStart = new Color(0.1f, 0.15f, 0.2f); // Calm Blue
+            Color ambientEnd = new Color(0.25f, 0.1f, 0.15f); // Lethal Magenta
+            RenderSettings.ambientLight = Color.Lerp(ambientStart, ambientEnd, matchProgress);
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
 
             if (Camera.main) Camera.main.backgroundColor = palette.Background;
+
+            // Ensure Performance Tracking
+            if (gameObject.GetComponent<PerformanceMonitor>() == null)
+                gameObject.AddComponent<PerformanceMonitor>();
+        }
+
+        void Update()
+        {
+            // Update match visuals every frame
+            SetupSkybox();
         }
 
         private void CalculateMapLogic()

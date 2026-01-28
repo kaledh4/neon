@@ -79,14 +79,31 @@ namespace NeonSplash.V0_1
         private void CheckControl()
         {
             Team oldTeam = currentWinningTeam;
+            ChunkStateController state = GetComponentInParent<ChunkStateController>();
 
-            if (redCount > 0 && blueCount == 0) currentWinningTeam = Team.Red;
-            else if (blueCount > 0 && redCount == 0) currentWinningTeam = Team.Blue;
-            else if (redCount > 0 && blueCount > 0) currentWinningTeam = Team.None; // Contested
-            else currentWinningTeam = Team.None; // Empty
+            if (redCount > 0 && blueCount == 0) 
+            {
+                currentWinningTeam = Team.Red;
+                if (state != null) state.state = ChunkState.Controlled;
+            }
+            else if (blueCount > 0 && redCount == 0) 
+            {
+                currentWinningTeam = Team.Blue;
+                if (state != null) state.state = ChunkState.Controlled;
+            }
+            else if (redCount > 0 && blueCount > 0) 
+            {
+                currentWinningTeam = Team.None; // Contested
+                if (state != null) state.state = ChunkState.Contested;
+            }
+            else 
+            {
+                currentWinningTeam = Team.None; // Empty
+                if (state != null) state.state = ChunkState.Neutral;
+            }
 
             // Notify Manager
-            if (GameManager.Instance != null && currentWinningTeam != oldTeam)
+            if (GameManager.Instance != null && (currentWinningTeam != oldTeam || (redCount > 0 && blueCount > 0)))
             {
                 GameManager.Instance.SetZoneOwner(currentWinningTeam);
                 UpdateVisuals(currentWinningTeam);
