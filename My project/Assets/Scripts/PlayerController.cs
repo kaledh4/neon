@@ -60,6 +60,11 @@ namespace NeonSplash.V0_1
             
             bullet.AddComponent<Projectile>();
             
+            // Ignore collision with player
+            var playerCol = GetComponent<Collider>();
+            var bulletCol = bullet.GetComponent<SphereCollider>();
+            if (playerCol != null && bulletCol != null) Physics.IgnoreCollision(bulletCol, playerCol);
+            
             // Apply alternate neon color
             if (palette != null)
             {

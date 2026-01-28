@@ -89,40 +89,55 @@ namespace NeonSplash.V0_1
         // --- Simple UI for testing ---
         void OnGUI()
         {
-            GUIStyle style = new GUIStyle();
-            style.fontSize = 24;
-            style.normal.textColor = Color.white;
+            ColorPalette palette = null;
+            MapGeneratorV2 generator = FindFirstObjectByType<MapGeneratorV2>();
+            
+            GUIStyle textStyle = new GUIStyle(GUI.skin.label);
+            textStyle.fontStyle = FontStyle.Bold;
+            textStyle.alignment = TextAnchor.MiddleCenter;
 
             // Timer
+            textStyle.fontSize = 28;
+            textStyle.normal.textColor = Color.white;
             string timeStr = string.Format("{0:00}:{1:00}", Mathf.FloorToInt(currentMatchTime / 60), Mathf.FloorToInt(currentMatchTime % 60));
-            GUI.Label(new Rect(Screen.width / 2 - 50, 20, 200, 50), timeStr, style);
+            GUI.Label(new Rect(Screen.width / 2 - 100, 20, 200, 50), "TIME: " + timeStr, textStyle);
 
             // Scores
-            GUI.color = Color.red;
-            GUI.Label(new Rect(20, 50, 300, 30), $"Red Control: {redHoldTime:F1}/{timeToWin}");
+            textStyle.fontSize = 20;
+            textStyle.alignment = TextAnchor.MiddleLeft;
+            GUI.color = new Color(1, 0.2f, 0); // Red Team fixed color
+            GUI.Label(new Rect(40, 40, 300, 30), $"RED STATUS: {redHoldTime:F1}s / {timeToWin}s", textStyle);
             
-            GUI.color = Color.cyan;
-            GUI.Label(new Rect(Screen.width - 250, 50, 300, 30), $"Blue Control: {blueHoldTime:F1}/{timeToWin}");
+            textStyle.alignment = TextAnchor.MiddleRight;
+            GUI.color = new Color(0, 0.6f, 1); // Blue Team fixed color
+            GUI.Label(new Rect(Screen.width - 340, 40, 300, 30), $"BLUE STATUS: {blueHoldTime:F1}s / {timeToWin}s", textStyle);
 
             // Center Status
-            GUI.color = Color.white;
             if (currentZoneOwner != Team.None)
             {
-                style.fontSize = 40;
-                style.alignment = TextAnchor.MiddleCenter;
-                GUI.Label(new Rect(Screen.width/2 - 200, 100, 400, 100), $"CONTROLLED BY {currentZoneOwner}", style);
+                textStyle.fontSize = 44;
+                textStyle.alignment = TextAnchor.MiddleCenter;
+                GUI.color = (currentZoneOwner == Team.Blue) ? new Color(0, 0.6f, 1) : new Color(1, 0.2f, 0);
+                GUI.Label(new Rect(Screen.width/2 - 300, 100, 600, 100), $">> {currentZoneOwner} DOMINATING <<", textStyle);
             }
 
             // Game Over
             if (isGameOver)
             {
-                style.fontSize = 60;
-                style.alignment = TextAnchor.MiddleCenter;
-                style.normal.textColor = Color.yellow;
-                GUI.Label(new Rect(0, Screen.height/2 - 50, Screen.width, 100), winnerText, style);
+                GUI.color = Color.white;
+                textStyle.fontSize = 72;
+                textStyle.alignment = TextAnchor.MiddleCenter;
+                textStyle.normal.textColor = Color.yellow;
+                
+                // Draw a background box for the win text
+                GUI.Box(new Rect(0, Screen.height/2 - 120, Screen.width, 240), "");
+                GUI.Label(new Rect(0, Screen.height/2 - 80, Screen.width, 100), winnerText, textStyle);
 
                 // Play Again Button
-                if (GUI.Button(new Rect(Screen.width/2 - 100, Screen.height/2 + 50, 200, 60), "PLAY AGAIN"))
+                GUIStyle btnStyle = new GUIStyle(GUI.skin.button);
+                btnStyle.fontSize = 24;
+                btnStyle.fontStyle = FontStyle.Bold;
+                if (GUI.Button(new Rect(Screen.width/2 - 120, Screen.height/2 + 60, 240, 70), "NEXT SEED MATCH", btnStyle))
                 {
                     RestartGame();
                 }
