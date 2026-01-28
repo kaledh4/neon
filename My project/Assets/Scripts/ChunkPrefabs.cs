@@ -33,6 +33,38 @@ namespace NeonSplash
             return mat;
         }
 
+        private static Texture2D _woodTexture;
+        private static Material GetWoodMaterial()
+        {
+            if (_woodTexture == null)
+            {
+                int size = 256;
+                _woodTexture = new Texture2D(size, size);
+                Color brown1 = new Color(0.15f, 0.1f, 0.05f);
+                Color brown2 = new Color(0.25f, 0.18f, 0.1f);
+                
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        // Simulate wood grain with vertical noise and horizontal plank lines
+                        float grain = Mathf.PerlinNoise(x * 0.1f, y * 5.0f);
+                        float plank = (x % 64 < 2) ? 0.3f : 1.0f; // Plank divisions
+                        Color c = Color.Lerp(brown1, brown2, grain) * plank;
+                        _woodTexture.SetPixel(x, y, c);
+                    }
+                }
+                _woodTexture.Apply();
+            }
+
+            Material mat = new Material(GetAppropriateShader());
+            mat.mainTexture = _woodTexture;
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", _woodTexture);
+            // Add a bit of rim lighting/gloss for a "treated wood" look
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.4f);
+            return mat;
+        }
+
         public static GameObject CreateBase(Vector3 position, ColorPalette palette, bool isBlue, float size = 100f)
         {
             GameObject group = new GameObject(isBlue ? "BaseBlue" : "BaseRed");
@@ -86,12 +118,14 @@ namespace NeonSplash
             GameObject group = new GameObject("Trees_Neon");
             group.transform.position = position;
 
-            // Base Floor (Visible & Tinted)
+            // Base Floor (Procedural Wood Style)
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
             floor.transform.localPosition = new Vector3(0, -0.25f, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
-            floor.GetComponent<Renderer>().material = GetNeonMaterial(new Color(0.1f, 0.1f, 0.15f), 0.3f);
+            Renderer rendT = floor.GetComponent<Renderer>();
+            rendT.material = GetWoodMaterial();
+            rendT.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
 
             for (int i = 0; i < 6; i++)
             {
@@ -122,12 +156,14 @@ namespace NeonSplash
             GameObject group = new GameObject("Garden_Chairs");
             group.transform.position = position;
 
-            // Base Floor (Visible & Tinted)
+            // Base Floor (Procedural Wood Style)
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
             floor.transform.localPosition = new Vector3(0, -0.25f, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
-            floor.GetComponent<Renderer>().material = GetNeonMaterial(new Color(0.1f, 0.1f, 0.15f), 0.3f);
+            Renderer rendG = floor.GetComponent<Renderer>();
+            rendG.material = GetWoodMaterial();
+            rendG.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
 
             // Lounge Chairs
             for (int i = 0; i < 4; i++)
@@ -148,12 +184,14 @@ namespace NeonSplash
             GameObject group = new GameObject("TikiBar_Neon");
             group.transform.position = position;
 
-            // Base Floor (Visible & Tinted)
+            // Base Floor (Procedural Wood Style)
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
             floor.transform.localPosition = new Vector3(0, -0.25f, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
-            floor.GetComponent<Renderer>().material = GetNeonMaterial(new Color(0.1f, 0.1f, 0.15f), 0.3f);
+            Renderer rendB = floor.GetComponent<Renderer>();
+            rendB.material = GetWoodMaterial();
+            rendB.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
 
             // Bar Table
             GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -177,12 +215,14 @@ namespace NeonSplash
             GameObject group = new GameObject("HotTub_VIP");
             group.transform.position = position;
 
-            // Base Floor (Visible & Tinted)
+            // Base Floor (Procedural Wood Style)
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
             floor.transform.localPosition = new Vector3(0, -0.25f, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
-            floor.GetComponent<Renderer>().material = GetNeonMaterial(new Color(0.1f, 0.1f, 0.15f), 0.3f);
+            Renderer rendTub = floor.GetComponent<Renderer>();
+            rendTub.material = GetWoodMaterial();
+            rendTub.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
 
             GameObject tub = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             tub.transform.SetParent(group.transform);
