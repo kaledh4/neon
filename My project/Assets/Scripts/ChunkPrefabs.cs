@@ -122,6 +122,13 @@ namespace NeonSplash
             GameObject group = new GameObject("Garden_Chairs");
             group.transform.position = position;
 
+            // Base Floor
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.transform.SetParent(group.transform);
+            floor.transform.localPosition = new Vector3(0, -0.2f, 0);
+            floor.transform.localScale = new Vector3(size, 0.4f, size);
+            floor.GetComponent<Renderer>().material = GetNeonMaterial(palette.Background, 0.1f);
+
             // Lounge Chairs
             for (int i = 0; i < 4; i++)
             {
@@ -140,6 +147,13 @@ namespace NeonSplash
         {
             GameObject group = new GameObject("TikiBar_Neon");
             group.transform.position = position;
+
+            // Base Floor
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.transform.SetParent(group.transform);
+            floor.transform.localPosition = new Vector3(0, -0.2f, 0);
+            floor.transform.localScale = new Vector3(size, 0.4f, size);
+            floor.GetComponent<Renderer>().material = GetNeonMaterial(palette.Background, 0.1f);
 
             // Bar Table
             GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -162,6 +176,13 @@ namespace NeonSplash
         {
             GameObject group = new GameObject("HotTub_VIP");
             group.transform.position = position;
+
+            // Base Floor
+            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.transform.SetParent(group.transform);
+            floor.transform.localPosition = new Vector3(0, -0.2f, 0);
+            floor.transform.localScale = new Vector3(size, 0.4f, size);
+            floor.GetComponent<Renderer>().material = GetNeonMaterial(palette.Background, 0.1f);
 
             GameObject tub = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             tub.transform.SetParent(group.transform);
