@@ -77,6 +77,13 @@ namespace NeonSplash.V0_1
             RenderSettings.ambientLight = Color.Lerp(ambientStart, ambientEnd, matchProgress);
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
 
+            // Sky Motion (System 5)
+            if (RenderSettings.skybox != null)
+            {
+                float rotation = Time.time * 0.5f; // Slow constant drift
+                RenderSettings.skybox.SetFloat("_Rotation", rotation);
+            }
+
             if (Camera.main) Camera.main.backgroundColor = palette.Background;
 
             // Ensure Performance Tracking
@@ -152,9 +159,13 @@ namespace NeonSplash.V0_1
         private void SpawnChunk(MapStep step, Vector3 offset, Transform parent)
         {
             Vector3 finalPos = step.position + offset;
-            GameObject chunkObj = null;
+            
+            // Vertical Depth Variation (System 4)
+            float vBias = Mathf.PerlinNoise(finalPos.x * 0.05f, finalPos.z * 0.05f);
+            finalPos += Vector3.up * vBias * 1.5f;
 
-            float innerSize = 100f; // Scale property
+            GameObject chunkObj = null;
+            float innerSize = 100f; 
 
             switch (step.typeId)
             {

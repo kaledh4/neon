@@ -13,6 +13,15 @@ namespace NeonSplash.V0_1
         public float basePulseSpeed = 2f;
         public float currentPulseMultiplier = 1f;
         public Team owningTeam = Team.None;
+        public Color factionBiasColor = Color.white;
+
+        void Start()
+        {
+            // Auto-detect faction bias based on position or team
+            if (transform.position.x < 450f) factionBiasColor = new Color(0, 0.8f, 1f); // Cyan Territory
+            else if (transform.position.x > 550f) factionBiasColor = new Color(1f, 0, 0.8f); // Magenta Territory
+            else factionBiasColor = new Color(0.5f, 0.5f, 0.5f); // Neutral Center
+        }
 
         void Update()
         {
@@ -26,25 +35,23 @@ namespace NeonSplash.V0_1
                     targetIntensityScale = 1.0f;
                     break;
                 case ChunkState.Contested:
-                    targetPulse = 2.5f;
+                    targetPulse = 3.0f; // Faster escalation
                     targetIntensityScale = 1.5f;
                     break;
                 case ChunkState.Controlled:
-                    targetPulse = 4.0f;
-                    targetIntensityScale = 1.8f;
+                    targetPulse = 4.5f;
+                    targetIntensityScale = 2.0f;
                     break;
             }
 
-            // Sync with match temporal evolution
             float matchProgress = 0f;
             if (GameManager.Instance != null)
                 matchProgress = 1f - (GameManager.Instance.currentMatchTime / GameManager.Instance.matchDuration);
             
             targetPulse *= (1f + matchProgress * 0.5f);
-            targetIntensityScale *= (1f + matchProgress * 0.2f);
 
             // Performance Scaling
-            if (PerformanceMonitor.currentFPS < 60)
+            if (PerformanceMonitor.currentFPS < 50)
             {
                 targetIntensityScale *= 0.8f;
                 targetPulse *= 0.7f;
@@ -56,7 +63,9 @@ namespace NeonSplash.V0_1
             {
                 if (l != null)
                 {
-                    l.intensity = Mathf.Lerp(l.intensity, 1.2f * targetIntensityScale, Time.deltaTime * 3f);
+                    l.intensity = Mathf.Lerp(l.intensity, 1.5f * targetIntensityScale, Time.deltaTime * 3f);
+                    // Bias light color toward faction
+                    l.color = Color.Lerp(l.color, factionBiasColor, 0.3f);
                 }
             }
         }
@@ -76,27 +85,74 @@ namespace NeonSplash.V0_1
 
     public class NeonPulse : MonoBehaviour
     {
+        public enum PulseType { Building, Foliage, Objective }
+        public PulseType role = PulseType.Building;
+        
         public float baseIntensity = 1.0f;
         public float frequency = 2f;
         public float amplitude = 0.2f;
+        public bool createGlowShell = true;
+
         private Light targetLight;
+        private Renderer targetRenderer;
         private Material targetMaterial;
         private Color baseColor;
         private ChunkStateController chunkState;
+        private GameObject glowShell;
 
         void Start()
         {
             targetLight = GetComponent<Light>();
-            var renderer = GetComponent<Renderer>();
-            if (renderer != null)
+            targetRenderer = GetComponent<Renderer>();
+            if (targetRenderer != null)
             {
-                targetMaterial = renderer.material;
+                targetMaterial = targetRenderer.material;
                 if (targetMaterial.HasProperty("_EmissionColor"))
                     baseColor = targetMaterial.GetColor("_EmissionColor");
+                
+                if (createGlowShell) SpawnGlowShell();
             }
             
             chunkState = GetComponentInParent<ChunkStateController>();
-            frequency *= Random.Range(0.8f, 1.2f);
+            
+            // Layered frequencies based on role
+            switch (role)
+            {
+                case PulseType.Building: frequency = 0.8f; amplitude = 0.1f; break;
+                case PulseType.Foliage: frequency = 2.5f; amplitude = 0.15f; break;
+                case PulseType.Objective: frequency = 5.0f; amplitude = 0.4f; break;
+            }
+            frequency *= Random.Range(0.9f, 1.1f);
+        }
+
+        void SpawnGlowShell()
+        {
+            glowShell = GameObject.CreatePrimitive(PrimitiveType.Sphere); // Simple fallback or copy mesh
+            // In a real scenario, we'd copy the mesh filter. 
+            // For this procedural app, we'll just scale up the current object if it's simple.
+            
+            glowShell = Instantiate(gameObject);
+            Destroy(glowShell.GetComponent<NeonPulse>());
+            Destroy(glowShell.GetComponent<Collider>());
+            if (glowShell.GetComponent<Light>()) Destroy(glowShell.GetComponent<Light>());
+
+            glowShell.transform.SetParent(transform);
+            glowShell.transform.localPosition = Vector3.up * 0.05f;
+            glowShell.transform.localScale = Vector3.one * 1.15f;
+            glowShell.transform.localRotation = Quaternion.identity;
+
+            var r = glowShell.GetComponent<Renderer>();
+            r.material = new Material(targetMaterial);
+            Color c = baseColor;
+            c.a = 0.2f;
+            r.material.color = c;
+            // Set to transparent
+            r.material.SetFloat("_Mode", 3);
+            r.material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            r.material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            r.material.SetInt("_ZWrite", 0);
+            r.material.EnableKeyword("_ALPHABLEND_ON");
+            r.material.renderQueue = 3000;
         }
 
         void Update()
@@ -104,14 +160,24 @@ namespace NeonSplash.V0_1
             float speedMult = chunkState != null ? chunkState.currentPulseMultiplier : 1f;
             float pulse = 1.0f + Mathf.Sin(Time.time * frequency * speedMult) * amplitude;
             
-            if (targetLight != null)
-            {
-                targetLight.intensity = baseIntensity * pulse;
-            }
+            if (targetLight != null) targetLight.intensity = baseIntensity * pulse;
 
             if (targetMaterial != null)
             {
                 targetMaterial.SetColor("_EmissionColor", baseColor * pulse);
+                // Apply Faction Bias from controller
+                if (chunkState != null)
+                {
+                    targetMaterial.SetColor("_BaseColor", Color.Lerp(targetMaterial.color, chunkState.factionBiasColor, 0.2f));
+                }
+            }
+
+            if (glowShell != null)
+            {
+                var r = glowShell.GetComponent<Renderer>();
+                Color c = baseColor * (pulse * 0.5f);
+                c.a = 0.15f * pulse;
+                r.material.SetColor("_EmissionColor", c);
             }
         }
     }
@@ -156,14 +222,16 @@ namespace NeonSplash.V0_1
             float bob = Mathf.Sin(Time.time * activeBobSpeed) * activeBobAmount;
             float sway = Mathf.Cos(Time.time * swaySpeed) * swayAmount;
             
-            transform.localPosition = baseLocalPos + new Vector3(sway, bob, 0);
+            // Epic Scale Drift (System 8)
+            float slowDrift = Mathf.Sin(Time.time * 0.5f) * 0.05f;
+            
+            transform.localPosition = baseLocalPos + new Vector3(sway, bob + slowDrift, 0);
 
             if (cam != null)
             {
-                float targetFOV = (velocity > 5f) ? 75f : 65f;
-                // FOV widening as match gets intense
-                targetFOV += matchProgress * 5f; 
-                cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFOV, Time.deltaTime * 4f);
+                float targetFOV = (velocity > 5f) ? 78f : 68f; // Wider FOV for epic scale
+                targetFOV += matchProgress * 10f; // Scale FOV with urgency
+                cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFOV, Time.deltaTime * 3f);
             }
         }
     }

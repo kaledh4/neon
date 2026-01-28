@@ -224,44 +224,55 @@ namespace NeonSplash
             rFloor.material = GetNeonMaterial(new Color(0, 0.5f, 0.1f), 0.3f);
             ApplyRoleColor(rFloor, 0.5f);
 
-            // 25 Decoration Items
-            for (int i = 0; i < 25; i++)
+            // 15 Trees (Tall Silhouettes - System 4)
+            for (int i = 0; i < 15; i++)
             {
                 Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
-                GameObject item;
-                if (i < 15) // 15 Trees
-                {
-                    item = new GameObject("NeonTree");
-                    item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos;
+                GameObject tree = new GameObject("NeonTree_Tall");
+                tree.transform.SetParent(group.transform);
+                tree.transform.localPosition = randomPos;
+                
+                // Vertical Rhythm
+                float hFactor = 1f + Mathf.PerlinNoise(randomPos.x * 0.1f, randomPos.z * 0.1f) * 0.8f;
 
-                    GameObject trunk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    trunk.transform.SetParent(item.transform);
-                    trunk.transform.localPosition = Vector3.up * 4;
-                    trunk.transform.localScale = new Vector3(1, 4, 1);
-                    trunk.GetComponent<Renderer>().material = GetMat(new Color(0.1f, 0.1f, 0.1f));
+                GameObject trunk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                trunk.transform.SetParent(tree.transform);
+                trunk.transform.localPosition = Vector3.up * 4 * hFactor;
+                trunk.transform.localScale = new Vector3(1, 4 * hFactor, 1);
+                trunk.GetComponent<Renderer>().material = GetMat(new Color(0.05f, 0.05f, 0.05f)); // Dark base
 
-                    GameObject leaves = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    leaves.transform.SetParent(item.transform);
-                    leaves.transform.localPosition = Vector3.up * 9;
-                    leaves.transform.localScale = new Vector3(6, 6, 6);
-                    var rendL = leaves.GetComponent<Renderer>();
-                    rendL.material = GetNeonMaterial(new Color(0, 1, 0.2f), 0.8f);
-                    ApplyRoleColor(rendL, 0.9f);
-                }
-                else // 10 Neon Flowers/Lights
-                {
-                    item = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 0.5f;
-                    item.transform.localScale = Vector3.one * 1.5f;
-                    var rendF = item.GetComponent<Renderer>();
-                    rendF.material = GetNeonMaterial(palette.Secondary, 2.0f);
-                    ApplyRoleColor(rendF, 1.0f);
-                    item.AddComponent<NeonSplash.V0_1.NeonPulse>().amplitude = 0.3f;
-                }
-                AdjustForFlow(item, randomPos);
-                ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.x + i));
+                GameObject leaves = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                leaves.transform.SetParent(tree.transform);
+                leaves.transform.localPosition = Vector3.up * 9 * hFactor;
+                leaves.transform.localScale = new Vector3(6, 6, 6);
+                var rendL = leaves.GetComponent<Renderer>();
+                rendL.material = GetNeonMaterial(new Color(0, 1, 0.2f), 1.2f);
+                ApplyRoleColor(rendL, 0.9f);
+                
+                var pulse = leaves.AddComponent<NeonSplash.V0_1.NeonPulse>();
+                pulse.role = NeonSplash.V0_1.NeonPulse.PulseType.Foliage;
+                
+                AdjustForFlow(tree, randomPos);
+                ApplyMicroVariation(tree.transform, rendL, (int)(position.x + i));
+            }
+
+            // 10 Neon Pylons (System 1 & 7)
+            for (int i = 0; i < 10; i++)
+            {
+                Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
+                GameObject pylon = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pylon.transform.SetParent(group.transform);
+                pylon.transform.localPosition = randomPos + Vector3.up * 10f;
+                pylon.transform.localScale = new Vector3(1, 10, 1);
+                var rendP = pylon.GetComponent<Renderer>();
+                rendP.material = GetNeonMaterial(palette.Secondary, 3.0f);
+                ApplyRoleColor(rendP, 1.2f);
+                
+                var pulse = pylon.AddComponent<NeonSplash.V0_1.NeonPulse>();
+                pulse.role = NeonSplash.V0_1.NeonPulse.PulseType.Objective;
+                pulse.amplitude = 0.5f;
+
+                AdjustForFlow(pylon, randomPos);
             }
 
             state.lights.Add(SpawnAccentLight(group.transform, Vector3.zero, new Color(0, 1, 0.2f)));
@@ -303,33 +314,40 @@ namespace NeonSplash
                 }
                 else if (i < 15) // 5 Umbrellas
                 {
-                    item = new GameObject("Umbrella");
+                    item = new GameObject("Umbrella_Tall");
                     item.transform.SetParent(group.transform);
                     item.transform.localPosition = randomPos;
+                    
+                    float hBias = 1f + Mathf.PerlinNoise(randomPos.x * 0.5f, randomPos.z * 0.5f) * 0.5f;
 
                     GameObject pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     pole.transform.SetParent(item.transform);
-                    pole.transform.localPosition = Vector3.up * 3;
-                    pole.transform.localScale = new Vector3(0.2f, 3, 0.2f);
+                    pole.transform.localPosition = Vector3.up * 3 * hBias;
+                    pole.transform.localScale = new Vector3(0.2f, 3 * hBias, 0.2f);
+                    pole.GetComponent<Renderer>().material = GetMat(new Color(0.05f, 0.05f, 0.05f));
                     
                     GameObject top = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     top.transform.SetParent(item.transform);
-                    top.transform.localPosition = Vector3.up * 6;
-                    top.transform.localScale = new Vector3(6, 0.1f, 6);
+                    top.transform.localPosition = Vector3.up * 6 * hBias;
+                    top.transform.localScale = new Vector3(7, 0.15f, 7);
                     var rU = top.GetComponent<Renderer>();
-                    rU.material = GetNeonMaterial(palette.Secondary, 0.8f);
+                    rU.material = GetNeonMaterial(palette.Secondary, 1.5f);
                     ApplyRoleColor(rU, 1.0f);
+                    
+                    var pulse = top.AddComponent<NeonSplash.V0_1.NeonPulse>();
+                    pulse.role = NeonSplash.V0_1.NeonPulse.PulseType.Building;
                 }
                 else // 10 Floating Neon Orbs
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 2.5f;
-                    item.transform.localScale = Vector3.one * 1.2f;
+                    item.transform.localPosition = randomPos + Vector3.up * 3f;
+                    item.transform.localScale = Vector3.one * 1.5f;
                     var rO = item.GetComponent<Renderer>();
-                    rO.material = GetNeonMaterial(palette.Shooting, 1.5f);
+                    rO.material = GetNeonMaterial(palette.Shooting, 3f);
                     ApplyRoleColor(rO, 1.2f);
-                    item.AddComponent<NeonSplash.V0_1.NeonPulse>();
+                    var pulse = item.AddComponent<NeonSplash.V0_1.NeonPulse>();
+                    pulse.role = NeonSplash.V0_1.NeonPulse.PulseType.Objective;
                 }
                 AdjustForFlow(item, randomPos);
                 ApplyMicroVariation(item.transform, item.GetComponent<Renderer>(), (int)(position.z + i));
@@ -462,14 +480,30 @@ namespace NeonSplash
             rendD.material.mainTextureScale = new Vector2(size/4f, size/4f);
             ApplyRoleColor(rendD, 0.6f);
 
-            // Glowing Water
+            // Glowing Water (System 6 - Water as Light source)
             GameObject water = GameObject.CreatePrimitive(PrimitiveType.Cube);
             water.transform.SetParent(group.transform);
             water.transform.localPosition = new Vector3(0, 0.2f, 0);
-            water.transform.localScale = new Vector3(size * 0.9f, 0.1f, size * 0.9f);
+            water.transform.localScale = new Vector3(size * 0.95f, 0.15f, size * 0.95f);
             var rendW = water.GetComponent<Renderer>();
-            rendW.material = GetNeonMaterial(palette.Primary, 1.5f);
+            rendW.material = GetNeonMaterial(palette.Primary, 3.0f);
             ApplyRoleColor(rendW, 0.8f);
+
+            // River Lights (System 6)
+            for (int i = 1; i <= 3; i++)
+            {
+                GameObject lightObj = new GameObject("WaterGlowLight");
+                lightObj.transform.SetParent(group.transform);
+                lightObj.transform.localPosition = new Vector3((i-2) * 25f, -2f, 0);
+                var l = lightObj.AddComponent<Light>();
+                l.type = LightType.Point;
+                l.intensity = 2.0f;
+                l.range = 30f;
+                l.color = palette.Primary;
+                var pulse = lightObj.AddComponent<NeonSplash.V0_1.NeonPulse>();
+                pulse.role = NeonSplash.V0_1.NeonPulse.PulseType.Building;
+                state.lights.Add(l);
+            }
 
             // Fake Reflections
             for (int i = 0; i < 5; i++)
