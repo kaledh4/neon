@@ -31,27 +31,67 @@ namespace NeonSplash.V0_1
                 CreateVisualFallback();
             }
 
-            // Add Collider if missing
+            // Add Collider - Encompass the Pool width
             if (GetComponent<Collider>() == null)
             {
                 BoxCollider box = gameObject.AddComponent<BoxCollider>();
                 box.isTrigger = true;
-                box.size = new Vector3(10, 5, 10); // Check chunk size
-                box.center = new Vector3(0, 2.5f, 0);
+                box.size = new Vector3(80, 20, 80); // Large enough for the pool area (90x90)
+                box.center = new Vector3(0, 10f, 0); // Higher vertical reach
             }
         }
 
         void CreateVisualFallback()
         {
-            GameObject ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            DestroyImmediate(ring.GetComponent<Collider>());
-            ring.name = "CaptureOverlay_Generated";
-            ring.transform.SetParent(transform);
-            ring.transform.localPosition = new Vector3(0, 0.1f, 0); // Just above floor
-            ring.transform.localScale = new Vector3(12, 0.1f, 12); // Flattish disk
-            overlayRenderer = ring.GetComponent<Renderer>();
-            overlayRenderer.material = new Material(Shader.Find("Standard")); // Or URP/Lit
+            // Create a tall vertical holographic cylinder
+            GameObject zone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            DestroyImmediate(zone.GetComponent<Collider>());
+            zone.name = "CaptureHologram";
+            zone.transform.SetParent(transform);
+            
+            // Position it so the bottom is on the pool floor and it extends upwards
+            zone.transform.localPosition = new Vector3(0, 5f, 0); 
+            zone.transform.localScale = new Vector3(15f, 5f, 15f); // 10m tall holographic pillar
+            
+            overlayRenderer = zone.GetComponent<Renderer>();
+            
+            // Use a material that supports transparency
+            Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            if (mat == null) mat = new Material(Shader.Find("Standard"));
+            
+            // Set rendering mode to Transparent manually if possible or just use low alpha
+            mat.SetFloat("_Mode", 3); // Transparent
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = 3000;
+            
+            overlayRenderer.material = mat;
             UpdateVisuals(Team.None);
+        }
+
+        void Update()
+        {
+            if (overlayRenderer == null) return;
+
+            // Holographic Pulse
+            float baseAlpha = 0.3f;
+            if (currentWinningTeam == Team.None && (redCount > 0 || blueCount > 0)) baseAlpha = 0.5f; // Intense when contested
+            
+            float matchProgress = 0f;
+            if (GameManager.Instance != null)
+                matchProgress = 1f - (GameManager.Instance.currentMatchTime / GameManager.Instance.matchDuration);
+
+            float pulse = Mathf.Sin(Time.time * (2f + matchProgress * 4f)) * 0.15f;
+            Color c = overlayRenderer.material.color;
+            c.a = baseAlpha + pulse;
+            overlayRenderer.material.color = c;
+            
+            // Intensify emission over time
+            overlayRenderer.material.SetColor("_EmissionColor", c * (2f + matchProgress * 3f));
         }
 
         void OnTriggerEnter(Collider other)
