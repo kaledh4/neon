@@ -175,6 +175,12 @@ namespace NeonSplash.V0_1
         [Range(-5f, 5f)] public float poolFloorOffset = 0f;
         [Range(-5f, 5f)] public float hotTubFloorOffset = 0f;
 
+        [Header("Fallback Models")]
+        public GameObject fallbackTikiModel;
+        public GameObject fallbackHotTubModel;
+        public GameObject fallbackGardenModel;
+        public GameObject fallbackPoolModel;
+
         private void SpawnChunk(MapStep step, Vector3 offset, Transform parent)
         {
             Vector3 finalPos = step.position + offset;
@@ -207,6 +213,12 @@ namespace NeonSplash.V0_1
             {
                 chunkObj.transform.SetParent(parent);
                 
+                // Spawn Walls for Logic (Only on Main Map to save perf/logic)
+                if (parent.name == "MainMap" && step.typeId != "BaseStart" && step.typeId != "BaseEnd")
+                {
+                    GenerateWallsForChunk(chunkObj, step.position, floorSize);
+                }
+
                 // Ensure physics are synced before we try to spawn effectively
                 Physics.SyncTransforms(); 
                 
@@ -224,8 +236,76 @@ namespace NeonSplash.V0_1
             }
         }
 
-        private void SpawnFallbackTrees(GameObject chunk, float size)
+        private void GenerateWallsForChunk(GameObject chunk, Vector3 gridPos, float size)
         {
+            // Directions: Forward, Back, Left, Right
+            // We need to check if there is a neighbor in the blueprint at gridPos + direction * chunkSize
+            
+            // NOTE: We check strictly against the grid positions defined in MapSteps
+            Vector3[] directions = { Vector3.forward, Vector3.back, Vector3.left, Vector3.right };
+            
+            // Adjust detection tolerance. Floating point errors can mess up == checks.
+            float tolerance = 1.0f; 
+
+            foreach (var dir in directions)
+            {
+                Vector3 neighborPos = gridPos + dir * chunkSize;
+                
+                // CRITICAL FIX: Check if ANY step in the blueprint matches this neighbor position.
+                // We ignore the typeId for connection checks; if a chunk is there, it's a path.
+                bool hasNeighbor = currentMapBlueprint.Any(s => Vector3.Distance(s.position, neighborPos) < tolerance);
+
+                // If NO neighbor exists in this direction, we seal it with a wall.
+                if (!hasNeighbor)
+                {
+                    // Spawn Neon Wall
+                    GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    wall.name = "NeonWall_Edge";
+                    wall.transform.SetParent(chunk.transform);
+                    
+                    // Position: Use local offset from chunk center
+                    // dir * (size * 0.5f) puts it exactly on the edge
+                    Vector3 localPos = dir * (size * 0.5f);
+                    
+                    // Lift up so bottom is at Y=0 (Height/2)
+                    float height = 6f; 
+                    wall.transform.localPosition = new Vector3(localPos.x, height * 0.5f, localPos.z);
+                    
+                    // Scale
+                    float thickness = 2f;
+                    float wallLength = size; 
+                 
+                    if (dir == Vector3.forward || dir == Vector3.back)
+                        wall.transform.localScale = new Vector3(wallLength, height, thickness);
+                    else
+                        wall.transform.localScale = new Vector3(thickness, height, wallLength);
+
+                    // Material - Primary Neon
+                    Material wallMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                    if (wallMat.shader.name == "Hidden/InternalErrorShader") wallMat = new Material(Shader.Find("Standard"));
+                    wallMat.color = palette.Primary;
+                    wallMat.SetColor("_EmissionColor", palette.Primary * 1.5f);
+                    wallMat.EnableKeyword("_EMISSION");
+                    wall.GetComponent<Renderer>().material = wallMat;
+
+                    // Top Detail (Alternative Color)
+                    GameObject topTrim = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    topTrim.transform.SetParent(wall.transform);
+                    topTrim.transform.localPosition = new Vector3(0, 0.5f, 0); // Top of parent
+                    topTrim.transform.localScale = new Vector3(1f, 0.1f, 1f); 
+                    
+                    Material trimMat = new Material(wallMat);
+                    trimMat.color = palette.Secondary;
+                    trimMat.SetColor("_EmissionColor", palette.Secondary * 2.0f);
+                    topTrim.GetComponent<Renderer>().material = trimMat;
+                }
+            }
+        }
+
+        private void SpawnFallbackTrees(GameObject chunk, float size, GameObject model)
+        {
+            if (model == null) return;
+            
             int count = 10;
             for (int i = 0; i < count; i++)
             {
@@ -235,7 +315,7 @@ namespace NeonSplash.V0_1
 
                 if (found)
                 {
-                    GameObject spawned = Instantiate(fallbackTreeModel, chunk.transform);
+                    GameObject spawned = Instantiate(model, chunk.transform);
                     spawned.transform.localPosition = localPos;
                     spawned.transform.localRotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
                     
@@ -256,17 +336,25 @@ namespace NeonSplash.V0_1
 
         private void GenerateObjectsForChunk(GameObject chunk, string typeId, float size)
         {
-            // FALLBACK: If no DataStore, uses simple fallback for Trees
-            if (chunkDataStore == null && typeId == "Trees" && fallbackTreeModel != null)
+            // FALLBACK SYSTEM
+            if (chunkDataStore == null)
             {
-                SpawnFallbackTrees(chunk, size);
+                if (typeId == "Trees" && fallbackTreeModel != null) SpawnFallbackTrees(chunk, size, fallbackTreeModel);
+                else if (typeId == "TikiBar" && fallbackTikiModel != null) SpawnFallbackTrees(chunk, size, fallbackTikiModel);
+                else if (typeId == "HotTub" && fallbackHotTubModel != null) SpawnFallbackTrees(chunk, size, fallbackHotTubModel);
+                else if (typeId == "Garden" && fallbackGardenModel != null) SpawnFallbackTrees(chunk, size, fallbackGardenModel);
+                else if (typeId.Contains("Pool") && fallbackPoolModel != null) SpawnFallbackTrees(chunk, size, fallbackPoolModel);
                 return;
             }
 
-            if (chunkDataStore == null) return;
-
             ChunkObjectMapping mapping = chunkDataStore.GetMapping(typeId);
-            if (mapping == null || mapping.weightedPrefabs == null || mapping.weightedPrefabs.Count == 0) return;
+            if (mapping == null || mapping.weightedPrefabs == null || mapping.weightedPrefabs.Count == 0)
+            {
+                // Try Fallbacks if mapping fails
+                if (typeId == "Trees") SpawnFallbackTrees(chunk, size, fallbackTreeModel);
+                else if (typeId == "TikiBar") SpawnFallbackTrees(chunk, size, fallbackTikiModel);
+                return;
+            }
 
             int count = Random.Range(mapping.minQuantity, mapping.maxQuantity + 1);
 
