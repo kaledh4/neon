@@ -156,6 +156,25 @@ namespace NeonSplash.V0_1
             foreach (var col in root.GetComponentsInChildren<Collider>()) DestroyImmediate(col);
         }
 
+        [Header("Procedural Spawning")]
+        public ChunkDataStore chunkDataStore;
+        [Tooltip("Drag your 'Tree test.fbx' here for instant trees without DataStore setup.")]
+        public GameObject fallbackTreeModel; 
+        
+        [Tooltip("Layers to avoid when spawning props (e.g., Walls, Other Props)")]
+        public LayerMask spawnObstacleMask;
+        
+        [Header("Model Settings")]
+        [Tooltip("Scale multiplier for fallback tree models")]
+        public float fallbackScale = 1.0f;
+        
+        [Header("Floor Height Adjustments")]
+        [Range(-5f, 5f)] public float treeFloorOffset = 0f;
+        [Range(-5f, 5f)] public float tikiFloorOffset = 0f;
+        [Range(-5f, 5f)] public float gardenFloorOffset = 0f;
+        [Range(-5f, 5f)] public float poolFloorOffset = 0f;
+        [Range(-5f, 5f)] public float hotTubFloorOffset = 0f;
+
         private void SpawnChunk(MapStep step, Vector3 offset, Transform parent)
         {
             Vector3 finalPos = step.position + offset;
@@ -165,21 +184,35 @@ namespace NeonSplash.V0_1
             finalPos += Vector3.up * vBias * 1.5f;
 
             GameObject chunkObj = null;
-            float innerSize = 100f; 
+            
+            // FIX: Use FULL size for the base chunk so floors connect (No Gaps)
+            float floorSize = chunkSize; 
+            
+            // Use a slightly smaller area for the FBX spawning to prevent overlap
+            float spawnAreaSize = chunkSize - 10f;
 
             switch (step.typeId)
             {
-                case "BaseStart": chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, true, innerSize); break;
-                case "BaseEnd":   chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, false, innerSize); break;
-                case "PoolStart": chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, true, innerSize); break;
-                case "PoolEnd":   chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, false, innerSize); break;
-                case "Trees":     chunkObj = ChunkPrefabs.CreateTrees(finalPos, palette, step.isMirrored, innerSize); break;
-                case "Garden":    chunkObj = ChunkPrefabs.CreateGarden(finalPos, palette, step.isMirrored, innerSize); break;
-                case "TikiBar":   chunkObj = ChunkPrefabs.CreateTikiBar(finalPos, palette, step.isMirrored, innerSize); break;
-                case "HotTub":    chunkObj = ChunkPrefabs.CreateHotTub(finalPos, palette, step.isMirrored, innerSize); break;
+                case "BaseStart": chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, true, floorSize); break;
+                case "BaseEnd":   chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, false, floorSize); break;
+                case "PoolStart": chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, true, floorSize, poolFloorOffset); break;
+                case "PoolEnd":   chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, false, floorSize, poolFloorOffset); break;
+                case "Trees":     chunkObj = ChunkPrefabs.CreateTrees(finalPos, palette, step.isMirrored, floorSize, treeFloorOffset); break;
+                case "Garden":    chunkObj = ChunkPrefabs.CreateGarden(finalPos, palette, step.isMirrored, floorSize, gardenFloorOffset); break;
+                case "TikiBar":   chunkObj = ChunkPrefabs.CreateTikiBar(finalPos, palette, step.isMirrored, floorSize, tikiFloorOffset); break;
+                case "HotTub":    chunkObj = ChunkPrefabs.CreateHotTub(finalPos, palette, step.isMirrored, floorSize, hotTubFloorOffset); break;
             }
 
-            if (chunkObj != null) chunkObj.transform.SetParent(parent);
+            if (chunkObj != null)
+            {
+                chunkObj.transform.SetParent(parent);
+                
+                // Ensure physics are synced before we try to spawn effectively
+                Physics.SyncTransforms(); 
+                
+                // NEW: Spawn FBX Models based on mapping with collision checks
+                GenerateObjectsForChunk(chunkObj, step.typeId, spawnAreaSize);
+            }
 
             if (step.typeId == "PoolStart" && parent.name == "MainMap")
             {
@@ -188,6 +221,96 @@ namespace NeonSplash.V0_1
                 triggerObj.transform.SetParent(parent);
                 triggerObj.transform.position = finalPos; 
                 triggerObj.AddComponent<CaptureZone>();
+            }
+        }
+
+        private void SpawnFallbackTrees(GameObject chunk, float size)
+        {
+            int count = 10;
+            for (int i = 0; i < count; i++)
+            {
+                // Simple random placement for fallback - Use ANY to be safe
+                bool found = ItemPlacementHelper.TryGetValidPlacement(chunk.transform.position, size, 2f * fallbackScale, 
+                    PlacementType.Any, spawnObstacleMask, out Vector3 localPos);
+
+                if (found)
+                {
+                    GameObject spawned = Instantiate(fallbackTreeModel, chunk.transform);
+                    spawned.transform.localPosition = localPos;
+                    spawned.transform.localRotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
+                    
+                    // Controlled Scale
+                    float scale = Random.Range(0.8f, 1.2f) * fallbackScale;
+                    spawned.transform.localScale = Vector3.one * scale;
+
+                    if (spawned.GetComponent<Collider>() == null && spawned.GetComponentInChildren<Collider>() == null)
+                    {
+                        var col = spawned.AddComponent<BoxCollider>();
+                        col.size = Vector3.one * 1f; 
+                        col.center = Vector3.up * 1f;
+                    }
+                    Physics.SyncTransforms();
+                }
+            }
+        }
+
+        private void GenerateObjectsForChunk(GameObject chunk, string typeId, float size)
+        {
+            // FALLBACK: If no DataStore, uses simple fallback for Trees
+            if (chunkDataStore == null && typeId == "Trees" && fallbackTreeModel != null)
+            {
+                SpawnFallbackTrees(chunk, size);
+                return;
+            }
+
+            if (chunkDataStore == null) return;
+
+            ChunkObjectMapping mapping = chunkDataStore.GetMapping(typeId);
+            if (mapping == null || mapping.weightedPrefabs == null || mapping.weightedPrefabs.Count == 0) return;
+
+            int count = Random.Range(mapping.minQuantity, mapping.maxQuantity + 1);
+
+            // Safety limit for retries per chunk to avoid infinite loops if map is full
+            int totalFailures = 0;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (totalFailures > 20) break; // Optimized: Give up if area is too crowded
+                
+                // Bulletproof: Check valid placement in World Space 
+                // We use chunk.transform.position as the origin
+                bool found = ItemPlacementHelper.TryGetValidPlacement(chunk.transform.position, size, mapping.itemSpacingRadius, 
+                    mapping.preferredPlacement, spawnObstacleMask, out Vector3 localPos);
+
+                if (found)
+                {
+                     GameObject prefab = mapping.GetRandomPrefab();
+                     if (prefab != null)
+                     {
+                         GameObject spawned = Instantiate(prefab, chunk.transform);
+                         spawned.transform.localPosition = localPos;
+                         spawned.transform.localRotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
+                         ChunkPrefabs.AdjustForFlow(spawned, spawned.transform.position);
+                         
+                         // Bulletproof: Ensure it has a collider so future raycasts hit it
+                         // If the FBX doesn't have a collider, dynamic placement will overlap.
+                         // We add a simple BoxCollider if missing to ensure spacing works.
+                         if (spawned.GetComponent<Collider>() == null && spawned.GetComponentInChildren<Collider>() == null)
+                         {
+                             var col = spawned.AddComponent<BoxCollider>();
+                             col.size = Vector3.one * 1.5f; 
+                             col.center = Vector3.up * 0.75f;
+                         }
+                         
+                         // Force update physics system so the next iteration sees this new collider
+                         Physics.SyncTransforms();
+                     }
+                }
+                else
+                {
+                    totalFailures++;
+                    i--; // Retry this index
+                }
             }
         }
 

@@ -209,71 +209,60 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreateTrees(Vector3 position, ColorPalette palette, bool mirror, float size = 100f)
+        private static Texture2D _grassTexture;
+        private static Material GetGrassMaterial()
+        {
+            if (_grassTexture == null)
+            {
+                int size = 256;
+                _grassTexture = new Texture2D(size, size);
+                Color darkGreen = new Color(0.05f, 0.2f, 0.05f); // Deep forest green
+                Color lightGreen = new Color(0.1f, 0.35f, 0.1f); // Vibrant grass green
+                
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        // Layered Perlin noise for organic look
+                        float noise1 = Mathf.PerlinNoise(x * 0.05f, y * 0.05f);
+                        float noise2 = Mathf.PerlinNoise(x * 0.2f, y * 0.2f) * 0.3f;
+                        float noise3 = Mathf.PerlinNoise(x * 0.8f, y * 0.8f) * 0.1f; // Detail grit
+                        
+                        float blend = Mathf.Clamp01(noise1 + noise2 + noise3);
+                        _grassTexture.SetPixel(x, y, Color.Lerp(darkGreen, lightGreen, blend));
+                    }
+                }
+                _grassTexture.Apply();
+            }
+            Material mat = new Material(GetAppropriateShader());
+            mat.mainTexture = _grassTexture;
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", _grassTexture); // URP support
+            
+            // Adjust smoothness to look like matte grass, not plastic
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.1f);
+            if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0.1f);
+            
+            return mat;
+        }
+
+        public static GameObject CreateTrees(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
         {
             GameObject group = new GameObject("Trees_Neon_Complex");
             group.transform.position = position;
             var state = group.AddComponent<NeonSplash.V0_1.ChunkStateController>();
 
-            // Base Floor (GREEN NEON STYLE)
+            // 1. IMPROVED GRASS FLOOR
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
-            floor.transform.localPosition = new Vector3(0, -0.25f, 0);
+            // Apply Floor Height Offset Here
+            floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rFloor = floor.GetComponent<Renderer>();
-            rFloor.material = GetNeonMaterial(new Color(0, 0.5f, 0.1f), 0.3f);
-            ApplyRoleColor(rFloor, 0.5f);
-
-            // 15 Trees (Tall Silhouettes - System 4)
-            for (int i = 0; i < 15; i++)
-            {
-                Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
-                GameObject tree = new GameObject("NeonTree_Tall");
-                tree.transform.SetParent(group.transform);
-                tree.transform.localPosition = randomPos;
-                
-                // Vertical Rhythm
-                float hFactor = 1f + Mathf.PerlinNoise(randomPos.x * 0.1f, randomPos.z * 0.1f) * 0.8f;
-
-                GameObject trunk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                trunk.transform.SetParent(tree.transform);
-                trunk.transform.localPosition = Vector3.up * 4 * hFactor;
-                trunk.transform.localScale = new Vector3(1, 4 * hFactor, 1);
-                trunk.GetComponent<Renderer>().material = GetMat(new Color(0.05f, 0.05f, 0.05f)); // Dark base
-
-                GameObject leaves = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                leaves.transform.SetParent(tree.transform);
-                leaves.transform.localPosition = Vector3.up * 9 * hFactor;
-                leaves.transform.localScale = new Vector3(6, 6, 6);
-                var rendL = leaves.GetComponent<Renderer>();
-                rendL.material = GetNeonMaterial(new Color(0, 1, 0.2f), 1.2f);
-                ApplyRoleColor(rendL, 0.9f);
-                
-                var pulse = leaves.AddComponent<NeonSplash.V0_1.NeonPulse>();
-                pulse.role = NeonSplash.V0_1.NeonPulse.PulseType.Foliage;
-                
-                AdjustForFlow(tree, randomPos);
-                ApplyMicroVariation(tree.transform, rendL, (int)(position.x + i));
-            }
-
-            // 10 Neon Pylons (System 1 & 7)
-            for (int i = 0; i < 10; i++)
-            {
-                Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
-                GameObject pylon = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                pylon.transform.SetParent(group.transform);
-                pylon.transform.localPosition = randomPos + Vector3.up * 10f;
-                pylon.transform.localScale = new Vector3(1, 10, 1);
-                var rendP = pylon.GetComponent<Renderer>();
-                rendP.material = GetNeonMaterial(palette.Secondary, 3.0f);
-                ApplyRoleColor(rendP, 1.2f);
-                
-                var pulse = pylon.AddComponent<NeonSplash.V0_1.NeonPulse>();
-                pulse.role = NeonSplash.V0_1.NeonPulse.PulseType.Objective;
-                pulse.amplitude = 0.5f;
-
-                AdjustForFlow(pylon, randomPos);
-            }
+            rFloor.material = GetGrassMaterial(); 
+            
+            // 2. CLEARED PRIMITIVE TREES & PYLONS
+            // As requested: Old yellow lines (Pylons) removed to keep it clean for FBX trees.
+            // FBX trees will be spawned by MapGeneratorV2.
 
             state.lights.Add(SpawnAccentLight(group.transform, Vector3.zero, new Color(0, 1, 0.2f)));
 
@@ -281,7 +270,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreateGarden(Vector3 position, ColorPalette palette, bool mirror, float size = 100f)
+        public static GameObject CreateGarden(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
         {
             GameObject group = new GameObject("Garden_VIP_Deck");
             group.transform.position = position;
@@ -290,23 +279,32 @@ namespace NeonSplash
             // Wood Floor
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
-            floor.transform.localPosition = new Vector3(0, -0.25f, 0);
+            floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rendG = floor.GetComponent<Renderer>();
             rendG.material = GetWoodMaterial();
             rendG.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
             ApplyRoleColor(rendG, 0.6f);
 
-            // 25 Items (Chairs, Umbrellas, Lights)
+            // 25 Items (Chairs, Umbrellas, Lights) ...
             for (int i = 0; i < 25; i++)
             {
                 Vector3 randomPos = new Vector3(Random.Range(-size*0.4f, size*0.4f), 0, Random.Range(-size*0.4f, size*0.4f));
+                // Lift items slightly if floor is raised, though usually they parent to group at Y=0.
+                // If floor is moved down, items float. 
+                // We should probably move items with floor offset too OR assume items are on Y=0 relative to group.
+                // Ideally, if floor moves, items should move? 
+                // The user asked to "LOWER FLOOR". If we lower floor, items at Y=0 will float.
+                // So we must offset items too.
+                
+                float itemYOffset = floorHeightOffset;
+
                 GameObject item;
                 if (i < 10) // 10 Lounge Chairs
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 0.5f;
+                    item.transform.localPosition = randomPos + Vector3.up * (0.5f + itemYOffset);
                     item.transform.localScale = new Vector3(4, 0.5f, 2);
                     var rC = item.GetComponent<Renderer>();
                     rC.material = GetNeonMaterial(palette.Primary, 0.5f);
@@ -316,7 +314,7 @@ namespace NeonSplash
                 {
                     item = new GameObject("Umbrella_Tall");
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos;
+                    item.transform.localPosition = randomPos + Vector3.up * itemYOffset;
                     
                     float hBias = 1f + Mathf.PerlinNoise(randomPos.x * 0.5f, randomPos.z * 0.5f) * 0.5f;
 
@@ -341,7 +339,7 @@ namespace NeonSplash
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 3f;
+                    item.transform.localPosition = randomPos + Vector3.up * (3f + itemYOffset);
                     item.transform.localScale = Vector3.one * 1.5f;
                     var rO = item.GetComponent<Renderer>();
                     rO.material = GetNeonMaterial(palette.Shooting, 3f);
@@ -357,7 +355,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreateTikiBar(Vector3 position, ColorPalette palette, bool mirror, float size = 100f)
+        public static GameObject CreateTikiBar(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
         {
             GameObject group = new GameObject("TikiBar_Neon_Deluxe");
             group.transform.position = position;
@@ -366,12 +364,14 @@ namespace NeonSplash
             // Wood Floor
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
-            floor.transform.localPosition = new Vector3(0, -0.25f, 0);
+            floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rendB = floor.GetComponent<Renderer>();
             rendB.material = GetWoodMaterial();
             rendB.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
             ApplyRoleColor(rendB, 0.6f);
+
+            float itemYOffset = floorHeightOffset;
 
             // 25 Items (Bar stuff, stools, lights)
             for (int i = 0; i < 25; i++)
@@ -382,7 +382,7 @@ namespace NeonSplash
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = new Vector3(0, 1.5f, 0);
+                    item.transform.localPosition = new Vector3(0, 1.5f + itemYOffset, 0);
                     item.transform.localScale = new Vector3(15, 3, 4);
                     item.GetComponent<Renderer>().material = GetMat(new Color(0.3f, 0.2f, 0.1f));
                 }
@@ -390,7 +390,7 @@ namespace NeonSplash
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 1f;
+                    item.transform.localPosition = randomPos + Vector3.up * (1f + itemYOffset);
                     item.transform.localScale = new Vector3(1.5f, 1f, 1.5f);
                     var rS = item.GetComponent<Renderer>();
                     rS.material = GetNeonMaterial(palette.Primary, 1.2f);
@@ -400,7 +400,7 @@ namespace NeonSplash
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 4;
+                    item.transform.localPosition = randomPos + Vector3.up * (4 + itemYOffset);
                     item.transform.localScale = new Vector3(1, 4, 1);
                     var rP = item.GetComponent<Renderer>();
                     rP.material = GetNeonMaterial(palette.Shooting, 3f);
@@ -414,7 +414,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreateHotTub(Vector3 position, ColorPalette palette, bool mirror, float size = 100f)
+        public static GameObject CreateHotTub(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
         {
             GameObject group = new GameObject("HotTub_Ultra_VIP");
             group.transform.position = position;
@@ -423,12 +423,14 @@ namespace NeonSplash
             // Wood Floor
             GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.transform.SetParent(group.transform);
-            floor.transform.localPosition = new Vector3(0, -0.25f, 0);
+            floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rendTub = floor.GetComponent<Renderer>();
             rendTub.material = GetWoodMaterial();
             rendTub.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
             ApplyRoleColor(rendTub, 0.6f);
+
+            float itemYOffset = floorHeightOffset;
 
             // 25 Items (Tubs, candles, towels, orbs)
             for (int i = 0; i < 25; i++)
@@ -439,7 +441,7 @@ namespace NeonSplash
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 0.5f;
+                    item.transform.localPosition = randomPos + Vector3.up * (0.5f + itemYOffset);
                     item.transform.localScale = new Vector3(8, 0.5f, 8);
                     var rT = item.GetComponent<Renderer>();
                     rT.material = GetNeonMaterial(palette.Secondary, 1.5f);
@@ -450,7 +452,7 @@ namespace NeonSplash
                 {
                     item = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     item.transform.SetParent(group.transform);
-                    item.transform.localPosition = randomPos + Vector3.up * 1f;
+                    item.transform.localPosition = randomPos + Vector3.up * (1f + itemYOffset);
                     item.transform.localScale = Vector3.one * 0.8f;
                     var rO = item.GetComponent<Renderer>();
                     rO.material = GetNeonMaterial(palette.Primary, 5f);
@@ -464,7 +466,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreatePool(Vector3 position, ColorPalette palette, bool isLeftHalf, float size = 100f)
+        public static GameObject CreatePool(Vector3 position, ColorPalette palette, bool isLeftHalf, float size = 100f, float floorHeightOffset = 0f)
         {
             GameObject group = new GameObject(isLeftHalf ? "PoolLeft" : "PoolRight");
             group.transform.position = position;
@@ -473,7 +475,7 @@ namespace NeonSplash
             // Pool Border (BLUISH TILES)
             GameObject deck = GameObject.CreatePrimitive(PrimitiveType.Cube);
             deck.transform.SetParent(group.transform);
-            deck.transform.localPosition = new Vector3(0, -0.15f, 0);
+            deck.transform.localPosition = new Vector3(0, -0.15f + floorHeightOffset, 0);
             deck.transform.localScale = new Vector3(size, 0.3f, size);
             Renderer rendD = deck.GetComponent<Renderer>();
             rendD.material = GetTileMaterial(new Color(0, 0.3f, 0.6f));
