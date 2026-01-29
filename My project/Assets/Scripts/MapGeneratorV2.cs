@@ -37,6 +37,22 @@ namespace NeonSplash.V0_1
             GenerateWorld();
         }
 
+        [System.Serializable]
+        public struct ScatterRule
+        {
+            public string name;
+            public GameObject prefab;
+            [Tooltip("Total number of these objects to spawn across the entire map")]
+            public int totalCount;
+            [Tooltip("Don't spawn on these chunk types (e.g. 'BaseStart')")]
+            public List<string> excludedTypes;
+            [Range(0.1f, 5f)] public float scaleMultiplier;
+            public float heightOffset;
+        }
+
+        [Header("Mission Control - Global Scatter")]
+        public List<ScatterRule> globalScatterRules;
+
         [ContextMenu("Generate World")]
         public void GenerateWorld()
         {
@@ -49,18 +65,135 @@ namespace NeonSplash.V0_1
             CalculateMapLogic();
 
             // Build Maps
-            BuildMapInstance(Vector3.zero, "MainMap", true);
+            GameObject mainMap = BuildMapInstance(Vector3.zero, "MainMap", true); // Capture reference
             if (spawnParallelMaps)
             {
                 BuildMapInstance(new Vector3(parallelDistance, 0, 0), "Parallel_Right", false);
                 BuildMapInstance(new Vector3(-parallelDistance, 0, 0), "Parallel_Left", false);
             }
 
+            // GLOBAL SCATTER PASS
+            if (mainMap != null) 
+            {
+                RunGlobalScatter(mainMap);
+                SpawnProceduralCrates(mainMap); // Auto-spawn 50 crates request
+            }
+
             SpawnPlayer();
         }
 
+        private void SpawnProceduralCrates(GameObject mapRoot)
+        {
+            // The user requested: "box 50 times... not over main stuff... random sizes"
+            // We implement this as a hardcoded default pass.
+            
+            GameObject crateGroup = new GameObject("Procedural_Crates_Auto");
+            crateGroup.transform.SetParent(mapRoot.transform);
+            activeObjects.Add(crateGroup);
+
+            int totalCrates = 50;
+            int spawned = 0;
+            int attempts = 0;
+            
+            // Material key
+            Material crateMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            if (crateMat.shader.name == "Hidden/InternalErrorShader") crateMat = new Material(Shader.Find("Standard"));
+            crateMat.color = new Color(1f, 0.5f, 0f); // Orange Neon
+            crateMat.EnableKeyword("_EMISSION");
+            crateMat.SetColor("_EmissionColor", crateMat.color * 2f);
+
+            while (spawned < totalCrates && attempts < 500)
+            {
+                attempts++;
+                if (currentMapBlueprint.Count == 0) break;
+                MapStep chunk = currentMapBlueprint[Random.Range(0, currentMapBlueprint.Count)];
+
+                // Exclude Main 'Features' to avoid clutter (Base, Pool)
+                if (chunk.typeId.Contains("Base") || chunk.typeId.Contains("Pool")) continue;
+
+                float halfSize = chunkSize * 0.4f;
+                Vector3 offset = new Vector3(Random.Range(-halfSize, halfSize), 0, Random.Range(-halfSize, halfSize));
+                Vector3 worldPos = chunk.position + offset;
+
+                // Collision Check
+                if (Physics.CheckSphere(worldPos + Vector3.up, 1f, spawnObstacleMask)) continue;
+
+                // Spawn Crate
+                GameObject crate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                crate.name = "Auto_Crate";
+                crate.transform.SetParent(crateGroup.transform);
+                
+                // Random Size
+                float s = Random.Range(0.8f, 2.5f);
+                crate.transform.localScale = new Vector3(s, s, s);
+                
+                // Position (Ground it)
+                crate.transform.position = worldPos + Vector3.up * (s * 0.5f);
+                crate.transform.rotation = Quaternion.Euler(0, Random.Range(0, 360), 0);
+                
+                crate.GetComponent<Renderer>().material = crateMat;
+                
+                spawned++;
+            }
+        }
+
+        private void RunGlobalScatter(GameObject mapRoot)
+        {
+            if (globalScatterRules == null) return;
+
+            foreach (var rule in globalScatterRules)
+            {
+                if (rule.prefab == null || rule.totalCount <= 0) continue;
+
+                // Create container
+                GameObject scatterGroup = new GameObject($"GlobalScatter_{rule.name}");
+                scatterGroup.transform.SetParent(mapRoot.transform);
+                activeObjects.Add(scatterGroup); // Mark for cleanup
+
+                int spawned = 0;
+                int attempts = 0;
+                int maxAttempts = rule.totalCount * 5;
+
+                while (spawned < rule.totalCount && attempts < maxAttempts)
+                {
+                    attempts++;
+                    // Pick random chunk from blueprint
+                    if (currentMapBlueprint.Count == 0) break;
+                    MapStep randomChunk = currentMapBlueprint[Random.Range(0, currentMapBlueprint.Count)];
+
+                    // Check exclusions
+                    if (rule.excludedTypes != null && rule.excludedTypes.Contains(randomChunk.typeId)) continue;
+
+                    // Valid Chunk -> Pick random position
+                    // Limit spawn area to avoid walls (80% of chunk size)
+                    float halfSize = chunkSize * 0.4f; 
+                    Vector3 randomOffset = new Vector3(Random.Range(-halfSize, halfSize), 0, Random.Range(-halfSize, halfSize));
+                    Vector3 targetWorldPos = randomChunk.position + randomOffset;
+                    
+                    // Simple collision check to avoid embedding inside trees/buildings
+                    // Check radius 2f
+                    if (Physics.CheckSphere(targetWorldPos + Vector3.up * 2f, 2f, spawnObstacleMask)) continue;
+
+                    // Spawn
+                    GameObject obj = Instantiate(rule.prefab, scatterGroup.transform);
+                    obj.transform.position = targetWorldPos + Vector3.up * rule.heightOffset;
+                    obj.transform.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
+                    obj.transform.localScale = Vector3.one * rule.scaleMultiplier;
+                    
+                    spawned++;
+                }
+            }
+        }
+        
+
+
+
+
         private void SetupSkybox()
         {
+            if (palette == null) palette = new ColorPalette(seed);
+            if (palette == null) return;
+
             if (skyboxMaterial != null) RenderSettings.skybox = skyboxMaterial;
             RenderSettings.fog = true;
             RenderSettings.fogColor = palette.Fog; 
@@ -68,9 +201,11 @@ namespace NeonSplash.V0_1
             RenderSettings.fogDensity = 0.005f;
 
             // Match Progress Ambient Shift (Temporal Variation)
+            // Note: GameManager might be null in Editor
             float matchProgress = 0f;
-            if (GameManager.Instance != null)
-                matchProgress = 1f - (GameManager.Instance.currentMatchTime / GameManager.Instance.matchDuration);
+            var gm = GameObject.FindFirstObjectByType<GameManager>();
+            if (gm != null)
+                matchProgress = 1f - (gm.currentMatchTime / gm.matchDuration);
 
             Color ambientStart = new Color(0.1f, 0.15f, 0.2f); // Calm Blue
             Color ambientEnd = new Color(0.25f, 0.1f, 0.15f); // Lethal Magenta
@@ -86,8 +221,8 @@ namespace NeonSplash.V0_1
 
             if (Camera.main) Camera.main.backgroundColor = palette.Background;
 
-            // Ensure Performance Tracking
-            if (gameObject.GetComponent<PerformanceMonitor>() == null)
+            // Ensure Performance Tracking (Only play mode)
+            if (Application.isPlaying && gameObject.GetComponent<PerformanceMonitor>() == null)
                 gameObject.AddComponent<PerformanceMonitor>();
         }
 
@@ -111,7 +246,8 @@ namespace NeonSplash.V0_1
             for (int i = 1; i <= 3; i++)
             {
                 string type = randomTypes[Random.Range(0, randomTypes.Length)];
-                float zOffset = (Random.Range(0, 3) - 1) * (chunkSize * 0.2f); // Offset scaled
+                // Restore randomness but keep it snapped to quarters (25%) so easier to fill
+                float zOffset = (Random.Range(0, 3) - 1) * (chunkSize * 0.25f); 
                 firstHalfTypes.Add(type);
                 firstHalfOffsets.Add(zOffset);
                 AddBlueprintStep(type, new Vector3(i * chunkSize, 0, zOffset), false);
@@ -138,7 +274,7 @@ namespace NeonSplash.V0_1
             currentMapBlueprint.Add(new MapStep { typeId = id, position = pos, isMirrored = mirror });
         }
 
-        private void BuildMapInstance(Vector3 worldOffset, string containerName, bool isGameplay)
+        private GameObject BuildMapInstance(Vector3 worldOffset, string containerName, bool isGameplay)
         {
             GameObject container = new GameObject(containerName);
             activeObjects.Add(container);
@@ -149,6 +285,7 @@ namespace NeonSplash.V0_1
             }
 
             if (!isGameplay) DisableColliders(container);
+            return container;
         }
 
         private void DisableColliders(GameObject root)
@@ -199,22 +336,23 @@ namespace NeonSplash.V0_1
 
             switch (step.typeId)
             {
-                case "BaseStart": chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, true, floorSize); break;
-                case "BaseEnd":   chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, false, floorSize); break;
-                case "PoolStart": chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, true, floorSize, poolFloorOffset); break;
-                case "PoolEnd":   chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, false, floorSize, poolFloorOffset); break;
-                case "Trees":     chunkObj = ChunkPrefabs.CreateTrees(finalPos, palette, step.isMirrored, floorSize, treeFloorOffset); break;
-                case "Garden":    chunkObj = ChunkPrefabs.CreateGarden(finalPos, palette, step.isMirrored, floorSize, gardenFloorOffset); break;
-                case "TikiBar":   chunkObj = ChunkPrefabs.CreateTikiBar(finalPos, palette, step.isMirrored, floorSize, tikiFloorOffset); break;
-                case "HotTub":    chunkObj = ChunkPrefabs.CreateHotTub(finalPos, palette, step.isMirrored, floorSize, hotTubFloorOffset); break;
+                case "BaseStart": chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, true, floorSize, customFloorMaterial); break;
+                case "BaseEnd":   chunkObj = ChunkPrefabs.CreateBase(finalPos, palette, false, floorSize, customFloorMaterial); break;
+                case "PoolStart": chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, true, floorSize, poolFloorOffset, customFloorMaterial); break;
+                case "PoolEnd":   chunkObj = ChunkPrefabs.CreatePool(finalPos, palette, false, floorSize, poolFloorOffset, customFloorMaterial); break;
+                case "Trees":     chunkObj = ChunkPrefabs.CreateTrees(finalPos, palette, step.isMirrored, floorSize, treeFloorOffset, customFloorMaterial); break;
+                case "Garden":    chunkObj = ChunkPrefabs.CreateGarden(finalPos, palette, step.isMirrored, floorSize, gardenFloorOffset, customFloorMaterial); break;
+                case "TikiBar":   chunkObj = ChunkPrefabs.CreateTikiBar(finalPos, palette, step.isMirrored, floorSize, tikiFloorOffset, customFloorMaterial); break;
+                case "HotTub":    chunkObj = ChunkPrefabs.CreateHotTub(finalPos, palette, step.isMirrored, floorSize, hotTubFloorOffset, customFloorMaterial); break;
             }
 
             if (chunkObj != null)
             {
                 chunkObj.transform.SetParent(parent);
                 
-                // Spawn Walls for Logic (Only on Main Map to save perf/logic)
-                if (parent.name == "MainMap" && step.typeId != "BaseStart" && step.typeId != "BaseEnd")
+                // Spawn Walls for Logic (Only on Main Map)
+                // Removed exclusion of BaseStart/BaseEnd so they get proper walls too
+                if (parent.name == "MainMap")
                 {
                     GenerateWallsForChunk(chunkObj, step.position, floorSize);
                 }
@@ -236,71 +374,152 @@ namespace NeonSplash.V0_1
             }
         }
 
+        [Header("Materials & Textures")]
+        public Material customFloorMaterial;
+        public Material customFenceMaterial;
+
         private void GenerateWallsForChunk(GameObject chunk, Vector3 gridPos, float size)
         {
-            // Directions: Forward, Back, Left, Right
-            // We need to check if there is a neighbor in the blueprint at gridPos + direction * chunkSize
-            
-            // NOTE: We check strictly against the grid positions defined in MapSteps
             Vector3[] directions = { Vector3.forward, Vector3.back, Vector3.left, Vector3.right };
             
-            // Adjust detection tolerance. Floating point errors can mess up == checks.
-            float tolerance = 1.0f; 
-
             foreach (var dir in directions)
             {
-                Vector3 neighborPos = gridPos + dir * chunkSize;
+                // Find Neighbor
+                MapStep? neighborStep = null;
+                // Manual search because we need the actual step data
+                foreach(var s in currentMapBlueprint) {
+                   Vector3 diff = s.position - gridPos;
+                   if (diff.magnitude < 1f) continue; // It's us
+                   if (diff.magnitude > chunkSize * 1.5f) continue; // Too far (increased tolerance)
+                   // More forgiving dot product check (0.7 instead of 0.9)
+                   if (Vector3.Dot(diff.normalized, dir) > 0.7f) {
+                       neighborStep = s;
+                       break;
+                   }
+                }
                 
-                // CRITICAL FIX: Check if ANY step in the blueprint matches this neighbor position.
-                // We ignore the typeId for connection checks; if a chunk is there, it's a path.
-                bool hasNeighbor = currentMapBlueprint.Any(s => Vector3.Distance(s.position, neighborPos) < tolerance);
+                bool hasNeighbor = neighborStep.HasValue;
 
-                // If NO neighbor exists in this direction, we seal it with a wall.
+                // Case 1: No Neighbor -> Spawn Main Outer Wall
                 if (!hasNeighbor)
                 {
-                    // Spawn Neon Wall
-                    GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    wall.name = "NeonWall_Edge";
-                    wall.transform.SetParent(chunk.transform);
-                    
-                    // Position: Use local offset from chunk center
-                    // dir * (size * 0.5f) puts it exactly on the edge
+                    // FENCE GROUP
+                    GameObject fenceGroup = new GameObject("NeonFence_Edge");
+                    fenceGroup.transform.SetParent(chunk.transform);
                     Vector3 localPos = dir * (size * 0.5f);
-                    
-                    // Lift up so bottom is at Y=0 (Height/2)
-                    float height = 6f; 
-                    wall.transform.localPosition = new Vector3(localPos.x, height * 0.5f, localPos.z);
-                    
-                    // Scale
-                    float thickness = 2f;
-                    float wallLength = size; 
-                 
-                    if (dir == Vector3.forward || dir == Vector3.back)
-                        wall.transform.localScale = new Vector3(wallLength, height, thickness);
-                    else
-                        wall.transform.localScale = new Vector3(thickness, height, wallLength);
+                    fenceGroup.transform.localPosition = localPos;
+                    fenceGroup.transform.localRotation = Quaternion.LookRotation(dir);
 
-                    // Material - Primary Neon
-                    Material wallMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                    if (wallMat.shader.name == "Hidden/InternalErrorShader") wallMat = new Material(Shader.Find("Standard"));
-                    wallMat.color = palette.Primary;
-                    wallMat.SetColor("_EmissionColor", palette.Primary * 1.5f);
-                    wallMat.EnableKeyword("_EMISSION");
-                    wall.GetComponent<Renderer>().material = wallMat;
+                    // Wall Dimensions
+                    float wallLength = size + 5f; 
+                    float height = 4f;
+                    float thickness = 1f;
 
-                    // Top Detail (Alternative Color)
-                    GameObject topTrim = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    topTrim.transform.SetParent(wall.transform);
-                    topTrim.transform.localPosition = new Vector3(0, 0.5f, 0); // Top of parent
-                    topTrim.transform.localScale = new Vector3(1f, 0.1f, 1f); 
-                    
-                    Material trimMat = new Material(wallMat);
-                    trimMat.color = palette.Secondary;
-                    trimMat.SetColor("_EmissionColor", palette.Secondary * 2.0f);
-                    topTrim.GetComponent<Renderer>().material = trimMat;
+                    // Spawn Visuals (Method extracted or inline)
+                    SpawnFenceVisuals(fenceGroup, wallLength, height, thickness, palette, customFenceMaterial);
+                }
+                // Case 2: Has Neighbor but Offset -> Spawn Bridge Wall
+                else if (neighborStep.HasValue)
+                {
+                     float zDiff = neighborStep.Value.position.z - gridPos.z;
+                     
+                     // Only bridge if looking Left/Right (X neighbors) AND there's an offset
+                     bool isXNeighbor = (dir == Vector3.left || dir == Vector3.right);
+                     
+                     if (isXNeighbor && Mathf.Abs(zDiff) > 1f)
+                     {
+                         // The bridge fills the Z-gap, so it runs along the Z-axis (Forward/Back)
+                         // and is positioned at the X-edge of the chunk.
+                         
+                         GameObject bridgeGroup = new GameObject("NeonFence_Bridge");
+                         bridgeGroup.transform.SetParent(chunk.transform);
+                         
+                         float bridgeLength = Mathf.Abs(zDiff) + 2f; // +2 overlap
+                         
+                         // Calculate Z position of the gap center
+                         float zCenter = 0f;
+                         if (zDiff > 0) // Neighbor is shifted +Z (up)
+                         {
+                             // My chunk covers Z: [-size/2, +size/2]
+                             // Neighbor covers Z: [-size/2 + zDiff, +size/2 + zDiff]
+                             // Gap on my side: Z from -size/2 to -size/2 + zDiff
+                             zCenter = -size * 0.5f + Mathf.Abs(zDiff) * 0.5f;
+                         }
+                         else // Neighbor is shifted -Z (down)
+                         {
+                             // Gap on my side: Z from +size/2 + zDiff to +size/2
+                             zCenter = size * 0.5f + zDiff * 0.5f;
+                         }
+                         
+                         // Position at the X-edge, centered on the gap Z
+                         Vector3 localPos = new Vector3(dir.x * (size * 0.5f), 0, zCenter);
+                         bridgeGroup.transform.localPosition = localPos;
+                         
+                         // ROTATE to face Forward (Z+) so the wall spans along Z
+                         bridgeGroup.transform.localRotation = Quaternion.LookRotation(Vector3.forward);
+
+                         // Visuals
+                         SpawnFenceVisuals(bridgeGroup, bridgeLength, 4f, 1f, palette, customFenceMaterial);
+                     }
                 }
             }
         }
+
+        private void SpawnFenceVisuals(GameObject parent, float length, float height, float thickness, ColorPalette pal, Material customMat)
+        {
+            // 1. Bottom Base
+            GameObject baseWall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            baseWall.transform.SetParent(parent.transform);
+            baseWall.transform.localPosition = new Vector3(0, 1f, 0); 
+            baseWall.transform.localRotation = Quaternion.identity;
+            baseWall.transform.localScale = new Vector3(length, 2f, 1f); 
+            
+            Material baseMat = customMat != null ? customMat : new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            if (customMat == null) {
+                if (baseMat.shader.name == "Hidden/InternalErrorShader") baseMat = new Material(Shader.Find("Standard"));
+                baseMat.color = pal.Secondary;
+                baseMat.SetColor("_EmissionColor", pal.Secondary * 1.5f);
+                baseMat.EnableKeyword("_EMISSION");
+            }
+            baseWall.GetComponent<Renderer>().material = baseMat;
+
+            // 2. Top Rail
+            GameObject topRail = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            topRail.transform.SetParent(parent.transform);
+            topRail.transform.localPosition = new Vector3(0, height, 0); 
+            topRail.transform.localScale = new Vector3(length, 0.5f, 0.5f);
+            
+            Material topMat = new Material(baseMat);
+            topMat.color = pal.Primary;
+            topMat.SetColor("_EmissionColor", pal.Primary * 2.0f);
+            topRail.GetComponent<Renderer>().material = topMat;
+
+            // 3. Posts
+            int postCount = Mathf.Max(2, Mathf.CeilToInt(length / 10f) + 1);
+            float spacing = length / (postCount - 1);
+            if (postCount < 2) spacing = 0;
+            
+            for (int i = 0; i < postCount; i++)
+            {
+                GameObject post = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                post.transform.SetParent(parent.transform);
+                float xPos = -length/2 + i * spacing;
+                post.transform.localPosition = new Vector3(xPos, height/2 + 0.5f, 0);
+                post.transform.localScale = new Vector3(0.5f, height - 1f, 0.5f);
+                post.GetComponent<Renderer>().material = topMat;
+            }
+            
+            // 4. Corner Pillars
+            for (int k = -1; k <= 1; k += 2)
+            {
+                GameObject pillar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pillar.transform.SetParent(parent.transform);
+                pillar.transform.localPosition = new Vector3(k * (length * 0.5f), height * 0.5f, 0); 
+                pillar.transform.localScale = new Vector3(thickness * 1.2f, height + 1f, thickness * 1.2f);
+                pillar.GetComponent<Renderer>().material = topMat;
+            }
+        }
+
 
         private void SpawnFallbackTrees(GameObject chunk, float size, GameObject model)
         {

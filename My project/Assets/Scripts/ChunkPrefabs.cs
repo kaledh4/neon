@@ -154,7 +154,7 @@ namespace NeonSplash
                 obj.transform.localScale *= 1.3f; // Denser surroundings
         }
 
-        public static GameObject CreateBase(Vector3 position, ColorPalette palette, bool isBlue, float size = 100f)
+        public static GameObject CreateBase(Vector3 position, ColorPalette palette, bool isBlue, float size = 100f, Material customFloor = null)
         {
             GameObject group = new GameObject(isBlue ? "BaseBlue" : "BaseRed");
             group.transform.position = position;
@@ -169,7 +169,10 @@ namespace NeonSplash
             floor.transform.localPosition = new Vector3(0, -0.25f, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer r = floor.GetComponent<Renderer>();
-            r.material = GetTileMaterial(teamColor);
+            
+            if (customFloor != null) r.material = customFloor;
+            else r.material = GetTileMaterial(teamColor);
+
             r.material.mainTextureScale = new Vector2(size / 5f, size / 5f);
             ApplyRoleColor(r, 0.6f); 
 
@@ -245,7 +248,7 @@ namespace NeonSplash
             return mat;
         }
 
-        public static GameObject CreateTrees(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
+        public static GameObject CreateTrees(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f, Material customFloor = null)
         {
             GameObject group = new GameObject("Trees_Neon_Complex");
             group.transform.position = position;
@@ -258,7 +261,9 @@ namespace NeonSplash
             floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rFloor = floor.GetComponent<Renderer>();
-            rFloor.material = GetGrassMaterial(); 
+            
+            if (customFloor != null) rFloor.material = customFloor;
+            else rFloor.material = GetGrassMaterial(); 
             
             // 2. CLEARED PRIMITIVE TREES & PYLONS
             // As requested: Old yellow lines (Pylons) removed to keep it clean for FBX trees.
@@ -270,7 +275,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreateGarden(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
+        public static GameObject CreateGarden(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f, Material customFloor = null)
         {
             GameObject group = new GameObject("Garden_VIP_Deck");
             group.transform.position = position;
@@ -282,7 +287,10 @@ namespace NeonSplash
             floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rendG = floor.GetComponent<Renderer>();
-            rendG.material = GetWoodMaterial();
+            
+            if (customFloor != null) rendG.material = customFloor;
+            else rendG.material = GetWoodMaterial();
+
             rendG.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
             ApplyRoleColor(rendG, 0.6f);
 
@@ -355,7 +363,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreateTikiBar(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
+        public static GameObject CreateTikiBar(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f, Material customFloor = null)
         {
             GameObject group = new GameObject("TikiBar_Neon_Deluxe");
             group.transform.position = position;
@@ -367,7 +375,10 @@ namespace NeonSplash
             floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rendB = floor.GetComponent<Renderer>();
-            rendB.material = GetWoodMaterial();
+            
+            if (customFloor != null) rendB.material = customFloor;
+            else rendB.material = GetWoodMaterial();
+
             rendB.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
             ApplyRoleColor(rendB, 0.6f);
 
@@ -414,7 +425,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreateHotTub(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f)
+        public static GameObject CreateHotTub(Vector3 position, ColorPalette palette, bool mirror, float size = 100f, float floorHeightOffset = 0f, Material customFloor = null)
         {
             GameObject group = new GameObject("HotTub_Ultra_VIP");
             group.transform.position = position;
@@ -426,7 +437,10 @@ namespace NeonSplash
             floor.transform.localPosition = new Vector3(0, -0.25f + floorHeightOffset, 0);
             floor.transform.localScale = new Vector3(size, 0.5f, size);
             Renderer rendTub = floor.GetComponent<Renderer>();
-            rendTub.material = GetWoodMaterial();
+
+            if (customFloor != null) rendTub.material = customFloor;
+            else rendTub.material = GetWoodMaterial();
+
             rendTub.material.mainTextureScale = new Vector2(size / 8f, size / 8f);
             ApplyRoleColor(rendTub, 0.6f);
 
@@ -466,7 +480,7 @@ namespace NeonSplash
             return group;
         }
 
-        public static GameObject CreatePool(Vector3 position, ColorPalette palette, bool isLeftHalf, float size = 100f, float floorHeightOffset = 0f)
+        public static GameObject CreatePool(Vector3 position, ColorPalette palette, bool isLeftHalf, float size = 100f, float floorHeightOffset = 0f, Material customFloor = null)
         {
             GameObject group = new GameObject(isLeftHalf ? "PoolLeft" : "PoolRight");
             group.transform.position = position;
@@ -478,7 +492,10 @@ namespace NeonSplash
             deck.transform.localPosition = new Vector3(0, -0.15f + floorHeightOffset, 0);
             deck.transform.localScale = new Vector3(size, 0.3f, size);
             Renderer rendD = deck.GetComponent<Renderer>();
-            rendD.material = GetTileMaterial(new Color(0, 0.3f, 0.6f));
+            
+            if (customFloor != null) rendD.material = customFloor;
+            else rendD.material = GetTileMaterial(new Color(0, 0.3f, 0.6f));
+
             rendD.material.mainTextureScale = new Vector2(size/4f, size/4f);
             ApplyRoleColor(rendD, 0.6f);
 
