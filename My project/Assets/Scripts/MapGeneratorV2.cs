@@ -455,8 +455,8 @@ namespace NeonSplash.V0_1
                          Vector3 localPos = new Vector3(dir.x * (size * 0.5f), 0, zCenter);
                          bridgeGroup.transform.localPosition = localPos;
                          
-                         // ROTATE to face Forward (Z+) so the wall spans along Z
-                         bridgeGroup.transform.localRotation = Quaternion.LookRotation(Vector3.forward);
+                         // ROTATE to face Right (X+) so the wall spans along X (perpendicular to gap)
+                         bridgeGroup.transform.localRotation = Quaternion.LookRotation(Vector3.right);
 
                          // Visuals
                          SpawnFenceVisuals(bridgeGroup, bridgeLength, 4f, 1f, palette, customFenceMaterial);
