@@ -428,37 +428,31 @@ namespace NeonSplash.V0_1
                      
                      if (isXNeighbor && Mathf.Abs(zDiff) > 1f)
                      {
-                         // The bridge fills the Z-gap, so it runs along the Z-axis (Forward/Back)
-                         // and is positioned at the X-edge of the chunk.
-                         
                          GameObject bridgeGroup = new GameObject("NeonFence_Bridge");
                          bridgeGroup.transform.SetParent(chunk.transform);
                          
-                         float bridgeLength = Mathf.Abs(zDiff) + 2f; // +2 overlap
+                         float bridgeLength = Mathf.Abs(zDiff) + 2f;
                          
                          // Calculate Z position of the gap center
                          float zCenter = 0f;
-                         if (zDiff > 0) // Neighbor is shifted +Z (up)
+                         if (zDiff > 0)
                          {
-                             // My chunk covers Z: [-size/2, +size/2]
-                             // Neighbor covers Z: [-size/2 + zDiff, +size/2 + zDiff]
-                             // Gap on my side: Z from -size/2 to -size/2 + zDiff
+                             // Neighbor shifted up (+Z), gap is at our bottom
                              zCenter = -size * 0.5f + Mathf.Abs(zDiff) * 0.5f;
                          }
-                         else // Neighbor is shifted -Z (down)
+                         else
                          {
-                             // Gap on my side: Z from +size/2 + zDiff to +size/2
+                             // Neighbor shifted down (-Z), gap is at our top
                              zCenter = size * 0.5f + zDiff * 0.5f;
                          }
                          
-                         // Position at the X-edge, centered on the gap Z
-                         Vector3 localPos = new Vector3(dir.x * (size * 0.5f), 0, zCenter);
-                         bridgeGroup.transform.localPosition = localPos;
+                         // Position: At the X-edge of chunk, Z-centered on the gap
+                         float xEdge = dir.x * (size * 0.5f);
+                         bridgeGroup.transform.localPosition = new Vector3(xEdge, 0, zCenter);
                          
-                         // ROTATE to face Right (X+) so the wall spans along X (perpendicular to gap)
-                         bridgeGroup.transform.localRotation = Quaternion.LookRotation(Vector3.right);
+                         // Face the neighbor direction (outward) - the wall stretches perpendicular to this
+                         bridgeGroup.transform.localRotation = Quaternion.LookRotation(dir);
 
-                         // Visuals
                          SpawnFenceVisuals(bridgeGroup, bridgeLength, 4f, 1f, palette, customFenceMaterial);
                      }
                 }
@@ -487,6 +481,7 @@ namespace NeonSplash.V0_1
             GameObject topRail = GameObject.CreatePrimitive(PrimitiveType.Cube);
             topRail.transform.SetParent(parent.transform);
             topRail.transform.localPosition = new Vector3(0, height, 0); 
+            topRail.transform.localRotation = Quaternion.identity;
             topRail.transform.localScale = new Vector3(length, 0.5f, 0.5f);
             
             Material topMat = new Material(baseMat);
